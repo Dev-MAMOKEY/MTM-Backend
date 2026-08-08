@@ -35,7 +35,7 @@ public class BaseImage extends BaseTimeEntity {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "photo_id", nullable = false, unique = true)
+    @JoinColumn(name = "photo_id", nullable = false)
     private Photo photo;
 
     /** 다시 만들면 이 값이 교체된다 — 새 행을 만들지 않는다. */
