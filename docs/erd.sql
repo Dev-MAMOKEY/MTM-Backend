@@ -94,20 +94,19 @@ CREATE TABLE product (
     name                  VARCHAR(255)   NOT NULL                COMMENT '제품명 — 목록 화면에 표시',
     color                 VARCHAR(100)   NULL                    COMMENT '색상',
     price                 DECIMAL(10,2)  NOT NULL                COMMENT '가격 — 목록 화면에 표시',
-    currency              CHAR(3)        NOT NULL DEFAULT 'KRW'  COMMENT '통화 — ISO 4217 (KRW)',
+    currency              ENUM('KRW')    NOT NULL DEFAULT 'KRW'  COMMENT '통화 — ISO 4217. 현재 KRW만 취급 (해외 크롤링 추가 시 값 확장)',
     description           TEXT           NULL                    COMMENT '제품 상세 원문 — Approximately D x W x H inches, 실측 치수 파서의 입력',
     dimension_depth_in    DECIMAL(5,2)   NULL                    COMMENT '실측 깊이 (인치) — 원문이 인치라 그대로 저장',
     dimension_width_in    DECIMAL(5,2)   NULL                    COMMENT '실측 너비 (인치)',
     dimension_height_in   DECIMAL(5,2)   NULL                    COMMENT '실측 높이 (인치)',
-    wear_type             VARCHAR(20)    NOT NULL                COMMENT '착용 방식 — 몸에 어떻게 지니는가. 가방 타입이 아니다',
+    wear_type             ENUM('ONE_SHOULDER', 'CROSSBODY', 'IN_HAND', 'WAIST', 'BESIDE')
+                                          NOT NULL                COMMENT '착용 방식 — 몸에 어떻게 지니는가. 가방 타입이 아니다',
     detail_url            VARCHAR(500)   NULL                    COMMENT '상세 페이지 URL',
     created_at            DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6)                          COMMENT '생성 시각',
     updated_at            DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 시각',
     PRIMARY KEY (id),
     UNIQUE KEY uk_product_sku (sku),
-    KEY idx_product_base_sku (base_sku),
-    CONSTRAINT ck_product_wear_type
-        CHECK (wear_type IN ('ONE_SHOULDER', 'CROSSBODY', 'IN_HAND', 'WAIST', 'BESIDE'))
+    KEY idx_product_base_sku (base_sku)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='제품';
 
 -- -----------------------------------------------------------------------------
@@ -143,7 +142,8 @@ CREATE TABLE worn_image (
     base_image_id   BIGINT       NOT NULL                COMMENT '바탕 기준 이미지 → base_image.id. 기준 이미지를 다시 만들면 함께 삭제된다',
     product_id      BIGINT       NOT NULL                COMMENT '올라간 제품 → product.id',
     storage_key     VARCHAR(500) NOT NULL                COMMENT '저장소 키 — 다시 만들기는 새 행이 아니라 이 값을 교체한다',
-    generator       VARCHAR(20)  NOT NULL                COMMENT '생성 게이트웨이 — GEMINI / OPENAI / FAKE. 두 AI 결과를 비교하려면 필요',
+    generator       ENUM('GEMINI', 'OPENAI', 'FAKE')
+                                  NOT NULL                COMMENT '생성 게이트웨이 — 두 AI 결과를 비교하려면 필요',
     product_cut_id  BIGINT       NULL                    COMMENT '사용한 제품 컷 → product_cut.id. 어떤 컷으로 그렸는지 추적용 (선택)',
     created_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6)                          COMMENT '생성 시각',
     updated_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 시각 — 다시 만든 시점',
@@ -151,8 +151,6 @@ CREATE TABLE worn_image (
     UNIQUE KEY uk_worn_image_base_product (base_image_id, product_id),
     KEY idx_worn_image_product_id (product_id),
     KEY idx_worn_image_product_cut_id (product_cut_id),
-    CONSTRAINT ck_worn_image_generator
-        CHECK (generator IN ('GEMINI', 'OPENAI', 'FAKE')),
     CONSTRAINT fk_worn_image_base_image
         FOREIGN KEY (base_image_id) REFERENCES base_image (id)
         ON DELETE CASCADE,

@@ -53,9 +53,10 @@ public class Product extends BaseTimeEntity {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
-    /** ISO 4217 (KRW) */
+    /** ISO 4217. 현재 KRW만 취급 — 해외 크롤링 추가 시 값 확장. */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 3)
-    private String currency;
+    private Currency currency;
 
     /** Approximately D x W x H inches — 실측 치수 파서의 입력. */
     @Lob
@@ -75,7 +76,7 @@ public class Product extends BaseTimeEntity {
 
     @Builder
     private Product(String sku, String baseSku, String name, String color,
-                     BigDecimal price, String currency, String description,
+                     BigDecimal price, Currency currency, String description,
                      Dimensions dimensions, WearType wearType, String detailUrl) {
         this.sku = sku;
         this.baseSku = baseSku;
@@ -93,7 +94,7 @@ public class Product extends BaseTimeEntity {
      * 크롤링 결과 적재 시 사용하는 정적 팩토리 메서드.
      */
     public static Product of(String sku, String baseSku, String name, String color,
-                              BigDecimal price, String currency, String description,
+                              BigDecimal price, Currency currency, String description,
                               Dimensions dimensions, WearType wearType, String detailUrl) {
         return Product.builder()
                 .sku(sku)
