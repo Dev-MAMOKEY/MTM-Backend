@@ -1,6 +1,7 @@
 package com.likelion.mtm.domain.member.service;
 
 import com.likelion.mtm.domain.member.dto.BodyInfoRequestDTO;
+import com.likelion.mtm.domain.member.dto.BodyInfoUpdateRequestDTO;
 import com.likelion.mtm.domain.member.dto.MemberResponseDTO;
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.member.repository.MemberRepository;
@@ -9,6 +10,8 @@ import com.likelion.mtm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -35,9 +38,21 @@ public class MemberService {
         return MemberResponseDTO.from(member);
     }
 
-    // 사용자 신체 정보 수정
+    // 사용자 키 몸무게 수정 후 저장
     @Transactional
-    public MemberResponseDTO updateBodyInfo(Long memberId, BodyInfoRequestDTO request) {
-        Member member
+    public MemberResponseDTO updateBodyInfo(Long memberId, BodyInfoUpdateRequestDTO request) {
+        Member member = findMember(memberId);
+
+        BigDecimal heightCm = request.heightCm() != null ? request.heightCm() : member.getHeightCm();
+        BigDecimal weightKg = request.weightKg() != null ? request.weightKg() : member.getWeightKg();
+
+        member.updateBodyInfo(heightCm, weightKg);
+
+        return MemberResponseDTO.from(member);
+    }
+
+    private Member findMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
     }
 }
