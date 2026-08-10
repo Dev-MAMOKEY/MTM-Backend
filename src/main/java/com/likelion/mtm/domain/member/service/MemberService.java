@@ -20,18 +20,15 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
 
-    /** 내 정보 조회 — DTO 변환까지 트랜잭션 안에서 끝낸다 */
     public MemberResponseDTO getMyInfo(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = findMember(memberId);
         return MemberResponseDTO.from(member);
     }
 
     // 사용자 키 몸무게 입력 받고 저장
     @Transactional
     public MemberResponseDTO saveBodyInfo(Long memberId, BodyInfoRequestDTO request) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = findMember(memberId);
 
         member.updateBodyInfo(request.heightCm(), request.weightKg());
 
