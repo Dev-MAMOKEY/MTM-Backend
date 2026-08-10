@@ -24,17 +24,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // 클라이
 
         String token = resolveToken(request); // 요청 헤더에서 토큰 꺼내기
 
-        if (token != null && jwtProvider.validateToken(token)) {
+        if (token != null && jwtProvider.validateToken(token) && jwtProvider.isAccessToken(token)) {
             Long memberId = jwtProvider.getMemberId(token);
 
-            // 회원 등급 구분이 없으므로 권한 목록은 비운다. principal에는 회원 식별자만 담는다
-            // → 컨트롤러에서 @AuthenticationPrincipal Long memberId 로 바로 받을 수 있다
+
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(memberId, null, List.of());
 
             SecurityContextHolder.getContext().setAuthentication(authentication); // SecurityContext에 인증 정보 저장 -> 요청을 통해 인증된 사용자라고 스프링에 알리는 방법
         }
-        // 토큰이 없거나 검증에 실패해도 여기서 끊지 않는다.
-        // 인증 정보를 넣지 않은 채 통과시키고, 보호된 경로였다면 JwtAuthenticationEntryPoint가 401을 만든다
+
         filterChain.doFilter(request, response);
     }
 

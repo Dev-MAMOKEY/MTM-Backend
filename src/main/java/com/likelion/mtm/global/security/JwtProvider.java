@@ -68,6 +68,12 @@ public class JwtProvider {
         return Long.parseLong(parseClaims(token).getSubject());
     }
 
+    // 액세스 토큰으로 발급된 것이 맞는지 확인 (인증 필터에서 사용)
+    // 리프레시 토큰을 Authorization 헤더로 보내 보호된 API를 호출하는 것을 막는다
+    public boolean isAccessToken(String token) {
+        return TYPE_ACCESS.equals(parseClaims(token).get(CLAIM_TYPE, String.class));
+    }
+
     // 리프레시 토큰으로 발급된 것이 맞는지 확인 (재발급에서만 사용)
     public boolean isRefreshToken(String token) {
         return TYPE_REFRESH.equals(parseClaims(token).get(CLAIM_TYPE, String.class));
