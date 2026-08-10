@@ -3,7 +3,7 @@ package com.likelion.mtm.infra.storage;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,7 +18,11 @@ import java.util.UUID;
  * 개발 환경에서 이미지를 로컬 파일 시스템에 저장하는 구현체.
  */
 @Component
-@Profile("local")
+@ConditionalOnProperty(
+        name = "image.storage.type",
+        havingValue = "local",
+        matchIfMissing = true
+)
 public class LocalImageStorage implements ImageStorage {
 
     private final Path rootPath;
@@ -28,12 +32,19 @@ public class LocalImageStorage implements ImageStorage {
             @Value("${image.storage.local.root-path}") String rootPath,
             @Value("${image.storage.local.base-url}") String baseUrl
     ) {
-        this.rootPath = Paths.get(rootPath).toAbsolutePath().normalize();
+        this.rootPath = Paths.get(rootPath)
+                .toAbsolutePath()
+                .normalize();
+
         this.baseUrl = baseUrl;
     }
 
     /**
      * 이미지를 로컬 파일 시스템에 저장하고 storage key를 반환한다.
+     *
+     * @param file 저장할 이미지 파일
+     * @param directory 저장 디렉터리
+     * @return 저장된 이미지의 storage key
      */
     @Override
     public String store(MultipartFile file, String directory) {
@@ -54,13 +65,15 @@ public class LocalImageStorage implements ImageStorage {
 
             return storageKey;
         } catch (IOException e) {
-            // 프로젝트의 적절한 ErrorCode로 교체한다.
-            throw new IllegalStateException("이미지 저장에 실패했습니다.", e);
+            throw new CustomException(ErrorCode.IMAGE_STORAGE_ERROR);
         }
     }
 
     /**
      * storage key를 로컬 이미지 접근 URL로 변환한다.
+     *
+     * @param storageKey 저장소 키
+     * @return 이미지 접근 URL
      */
     @Override
     public String getUrl(String storageKey) {
@@ -69,6 +82,8 @@ public class LocalImageStorage implements ImageStorage {
 
     /**
      * 로컬 파일 시스템에서 이미지를 삭제한다.
+     *
+     * @param storageKey 저장소 키
      */
     @Override
     public void delete(String storageKey) {
@@ -77,13 +92,15 @@ public class LocalImageStorage implements ImageStorage {
         try {
             Files.deleteIfExists(targetPath);
         } catch (IOException e) {
-            // 프로젝트의 적절한 ErrorCode로 교체한다.
-            throw new IllegalStateException("이미지 삭제에 실패했습니다.", e);
+            throw new CustomException(ErrorCode.IMAGE_STORAGE_ERROR);
         }
     }
 
     /**
      * 원본 파일명에서 확장자를 추출한다.
+     *
+     * @param originalFilename 원본 파일명
+     * @return 확장자. 확장자가 없으면 빈 문자열
      */
     private String extractExtension(String originalFilename) {
         if (originalFilename == null) {

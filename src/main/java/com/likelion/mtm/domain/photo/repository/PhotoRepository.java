@@ -11,10 +11,10 @@ import java.util.List;
 public interface PhotoRepository extends JpaRepository<Photo, Long> {
 
     /**
-     * 특정 회원의 사진첩을 최신 업로드 순으로 조회한다.
+     * 특정 회원이 업로드한 원본 사진을 최신순으로 조회한다.
      *
      * @param memberId 회원 식별자
-     * @return 해당 회원이 업로드한 원본 사진 목록
+     * @return 해당 회원의 원본 사진 목록
      */
     List<Photo> findAllByMemberIdOrderByCreatedAtDesc(Long memberId);
 }
