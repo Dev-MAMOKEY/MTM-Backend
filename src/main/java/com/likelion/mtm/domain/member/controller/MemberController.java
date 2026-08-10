@@ -1,5 +1,6 @@
 package com.likelion.mtm.domain.member.controller;
 
+import com.likelion.mtm.domain.member.dto.BodyInfoRequestDTO;
 import com.likelion.mtm.domain.member.dto.MemberResponseDTO;
 import com.likelion.mtm.domain.member.service.MemberService;
 import com.likelion.mtm.global.rsdata.RsData;
@@ -7,12 +8,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /** 회원 API — 로그인한 회원이 자기 정보를 다루는 엔드포인트 */
 @Tag(name = "회원", description = "내 정보 조회 · 신체 정보")
@@ -32,5 +32,18 @@ public class MemberController {
     public ResponseEntity<RsData<MemberResponseDTO>> getMyInfo(@AuthenticationPrincipal Long memberId) {
         // memberId는 JwtAuthenticationFilter가 SecurityContext에 넣어 둔 값이다
         return ResponseEntity.ok(RsData.success(memberService.getMyInfo(memberId)));
+    }
+
+    @Operation(summary = "신체 정보 저장", description = "키와 몸무게를 저장한다. 둘 다 필수이며, 이미 값이 있으면 새 값으로 교체된다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "저장 성공"),
+            @ApiResponse(responseCode = "400", description = "값이 비었거나 범위를 벗어남"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨")
+    })
+    @PostMapping("/me/body-info")
+    public ResponseEntity<RsData<MemberResponseDTO>> saveBodyInfo(
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody BodyInfoRequestDTO request) {
+        return ResponseEntity.ok(RsData.success(memberService.saveBodyInfo(memberId, request)));
     }
 }
