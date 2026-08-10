@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:mtm;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+custom:
+  jwt:
+    secret-key: test-secret-key-test-secret-key-test-secret-key
+    access-exp-min: 30
+    refresh-exp-day: 7
+
+aws:
+  region: ap-northeast-2
+  s3:
+    bucket: test-bucket
+
+image:
+  storage:
+    type: local
+    local:
+      root-path: build/test-uploads
+      base-url: http://localhost:8080/images
