@@ -1,5 +1,7 @@
 package com.likelion.mtm.global.config;
 
+import com.likelion.mtm.global.security.JwtAccessDeniedHandler;
+import com.likelion.mtm.global.security.JwtAuthenticationEntryPoint;
 import com.likelion.mtm.global.security.JwtAuthenticationFilter;
 import com.likelion.mtm.global.security.JwtProvider;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,10 @@ public class SecurityConfig {
 
     private final JwtProvider jwtProvider;
 
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -40,7 +46,12 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
+                // 인증(401)·인가(403) 실패를 RsData 포맷으로 응답
+                // 시큐리티 필터 체인에서 터지므로 GlobalExceptionHandler가 못 잡는다
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler));
 
         return http.build();
     }
