@@ -39,3 +39,17 @@ springdoc:
   api-docs:
     default-consumes-media-type: application/json
     default-produces-media-type: application/json
+
+# AWS
+aws:
+  region: ap-northeast-2
+  s3:
+    bucket: mtm-images-260811
+
+# 이미지 저장소
+image:
+  storage:
+    type: ${IMAGE_STORAGE_TYPE:local}
+    local:
+      root-path: uploads
+      base-url: http://localhost:8080/images
