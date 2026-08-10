@@ -22,3 +22,20 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+# JWT 설정
+custom:
+  jwt:
+    secret-key: ${JWT_SECRET}
+    access-exp-min: ${JWT_ACCESS_EXP_MIN}
+    refresh-exp-day: ${JWT_REFRESH_EXP_DAY}
+
+# Swagger 설정
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    default-consumes-media-type: application/json
+    default-produces-media-type: application/json
