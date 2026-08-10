@@ -1,7 +1,8 @@
 package com.likelion.mtm.domain.member.controller;
 
 import com.likelion.mtm.domain.member.dto.MemberResponseDTO;
-import com.likelion.mtm.global.common.RsData;
+import com.likelion.mtm.domain.member.service.MemberService;
+import com.likelion.mtm.global.rsdata.RsData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MemberController {
 
-    private final MemberService memberService
+    private final MemberService memberService;
 
     @Operation(summary = "내 정보 조회", description = "액세스 토큰으로 식별된 회원의 정보를 돌려준다.")
     @ApiResponses({
