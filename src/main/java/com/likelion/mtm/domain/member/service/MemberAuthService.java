@@ -12,6 +12,7 @@ import com.likelion.mtm.global.security.JwtProvider;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +37,14 @@ public class MemberAuthService {
                 request.email(),
                 passwordEncoder.encode(request.password())
         );
-        memberRepository.save(member);
+
+        try {
+            memberRepository.save(member);
+        } catch (DataIntegrityViolationException e) {
+            // 위 중복 검사와 INSERT 사이에 같은 이메일이 들어온 경우(가입 버튼 더블클릭 등)
+            // DB의 uk_member_email 제약에 걸린다. 500이 아니라 평소와 같은 409로 맞춘다
+            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
     }
 
     public TokenResponseDTO login(LoginRequestDTO request) {
