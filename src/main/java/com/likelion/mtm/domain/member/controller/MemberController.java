@@ -1,6 +1,7 @@
 package com.likelion.mtm.domain.member.controller;
 
 import com.likelion.mtm.domain.member.dto.BodyInfoRequestDTO;
+import com.likelion.mtm.domain.member.dto.BodyInfoUpdateRequestDTO;
 import com.likelion.mtm.domain.member.dto.MemberResponseDTO;
 import com.likelion.mtm.domain.member.service.MemberService;
 import com.likelion.mtm.global.rsdata.RsData;
@@ -45,5 +46,18 @@ public class MemberController {
             @AuthenticationPrincipal Long memberId,
             @Valid @RequestBody BodyInfoRequestDTO request) {
         return ResponseEntity.ok(RsData.success(memberService.saveBodyInfo(memberId, request)));
+    }
+
+    @Operation(summary = "신체 정보 수정", description = "프로필에서 키 또는 몸무게를 수정한다. 보내지 않은 값은 기존 값을 유지한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "둘 다 비었거나 범위를 벗어남"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨")
+    })
+    @PatchMapping("/me/body-info")
+    public ResponseEntity<RsData<MemberResponseDTO>> updateBodyInfo(
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody BodyInfoUpdateRequestDTO request) {
+        return ResponseEntity.ok(RsData.success(memberService.updateBodyInfo(memberId, request)));
     }
 }
