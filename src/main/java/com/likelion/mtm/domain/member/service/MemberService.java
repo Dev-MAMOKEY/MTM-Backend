@@ -34,4 +34,10 @@ public class MemberService {
 
         return MemberResponseDTO.from(member);
     }
+
+    // 사용자 신체 정보 수정
+    @Transactional
+    public MemberResponseDTO updateBodyInfo(Long memberId, BodyInfoRequestDTO request) {
+        Member member
+    }
 }
