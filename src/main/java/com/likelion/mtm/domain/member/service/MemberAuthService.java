@@ -78,4 +78,4 @@ public class MemberAuthService {
 
         return new TokenResponseDTO(jwtProvider.createAccessToken(memberId), refreshToken);
     }
-} 
+}
