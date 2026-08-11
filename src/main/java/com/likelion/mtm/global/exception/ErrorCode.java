@@ -25,6 +25,11 @@ public enum ErrorCode {
     IMAGE_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "IMAGE_STORAGE_ERROR", "이미지 저장 중 오류가 발생했습니다."),
     FILE_SIZE_EXCEEDED(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_SIZE_EXCEEDED", "업로드 가능한 파일 크기를 초과했습니다."),
 
+    // 기준 이미지
+    PHOTO_NOT_FOUND(HttpStatus.NOT_FOUND, "PHOTO_NOT_FOUND", "존재하지 않는 원본 사진입니다."),
+    BODY_INFO_REQUIRED(HttpStatus.BAD_REQUEST, "BODY_INFO_REQUIRED", "기준 이미지 생성에는 키와 몸무게가 필요합니다."),
+    IMAGE_GENERATION_ERROR(HttpStatus.BAD_GATEWAY, "IMAGE_GENERATION_ERROR", "이미지 생성에 실패했습니다."),
+
     // 토큰
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "토큰이 만료되었습니다."),
     TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", "유효하지 않은 토큰입니다."),
