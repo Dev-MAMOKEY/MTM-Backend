@@ -4,7 +4,6 @@ import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -24,10 +23,6 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-        name = "image.storage.type",
-        havingValue = "s3"
-)
 public class S3ImageStorage implements ImageStorage {
 
     private final S3Client s3Client;

@@ -4,7 +4,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 이미지 저장소 추상화 인터페이스.
- * 개발 환경의 로컬 저장소와 배포 환경의 S3 저장소를 동일한 방식으로 사용할 수 있게 한다.
+ * 이미지 저장소 구현을 동일한 방식으로 사용할 수 있게 한다.
  */
 public interface ImageStorage {
 
