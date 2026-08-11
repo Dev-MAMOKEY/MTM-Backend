@@ -93,4 +93,5 @@ public class PhotoService {
             throw new CustomException(ErrorCode.INVALID_IMAGE_FILE);
         }
     }
+
 }
