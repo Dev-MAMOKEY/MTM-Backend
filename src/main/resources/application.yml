@@ -50,3 +50,9 @@ aws:
   region: ap-northeast-2
   s3:
     bucket: mtm-images-260811
+
+# Gemini 이미지 생성
+gemini:
+  enabled: ${GEMINI_ENABLED:false}
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash-image}
