@@ -7,6 +7,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 컨트롤러에서 빠져나온 예외를 전부 여기서 RsData 형식으로 바꾼다.
@@ -33,6 +34,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.BAD_REQUEST.getHttpStatus())
                 .body(RsData.fail(ErrorCode.BAD_REQUEST, message));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<RsData<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException e
+    ) {
+        return ResponseEntity
+                .status(ErrorCode.FILE_SIZE_EXCEEDED.getHttpStatus())
+                .body(RsData.fail(ErrorCode.FILE_SIZE_EXCEEDED));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
