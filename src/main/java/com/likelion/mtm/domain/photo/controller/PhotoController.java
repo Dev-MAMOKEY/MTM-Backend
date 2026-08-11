@@ -73,4 +73,5 @@ public class PhotoController {
                 RsData.success(photoService.getPhotos(memberId))
         );
     }
+
 }
