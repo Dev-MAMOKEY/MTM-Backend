@@ -6,10 +6,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -32,12 +34,11 @@ public class S3ImageStorage implements ImageStorage {
     private String bucket;
 
     /**
-     * 이미지를 S3에 저장한다.
+     * 웹 업로드 이미지를 메모리에 모두 올리지 않고 S3에 스트리밍한다.
      */
     @Override
     public String store(MultipartFile file, String directory) {
-        String extension = getExtension(file.getOriginalFilename());
-        String storageKey = directory + "/" + UUID.randomUUID() + extension;
+        String storageKey = directory + "/" + UUID.randomUUID() + getExtension(file.getOriginalFilename());
 
         try {
             PutObjectRequest request = PutObjectRequest.builder()
@@ -48,15 +49,59 @@ public class S3ImageStorage implements ImageStorage {
 
             s3Client.putObject(
                     request,
-                    RequestBody.fromInputStream(
-                            file.getInputStream(),
-                            file.getSize()
-                    )
+                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+            );
+
+            return storageKey;
+        } catch (IOException e) {
+            throw new CustomException(ErrorCode.IMAGE_STORAGE_ERROR);
+        }
+    }
+
+    /**
+     * 이미 바이트로 존재하는 생성 이미지를 S3에 저장한다.
+     */
+    @Override
+    public String store(ImageData image, String directory) {
+        String storageKey = directory + "/" + UUID.randomUUID();
+
+        try {
+            PutObjectRequest request = PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(storageKey)
+                    .contentType(image.mimeType())
+                    .build();
+
+            s3Client.putObject(
+                    request,
+                    RequestBody.fromBytes(image.data())
             );
 
             return storageKey;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
+            throw new CustomException(ErrorCode.IMAGE_STORAGE_ERROR);
+        }
+    }
+
+    /**
+     * S3 객체의 바이너리와 Content-Type을 읽는다.
+     */
+    @Override
+    public ImageData load(String storageKey) {
+        try {
+            GetObjectRequest request = GetObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(storageKey)
+                    .build();
+
+            ResponseBytes<GetObjectResponse> response = s3Client.getObjectAsBytes(request);
+
+            return new ImageData(
+                    response.asByteArray(),
+                    response.response().contentType()
+            );
+        } catch (Exception e) {
             throw new CustomException(ErrorCode.IMAGE_STORAGE_ERROR);
         }
     }
@@ -101,7 +146,7 @@ public class S3ImageStorage implements ImageStorage {
     }
 
     /**
-     * 파일명에서 확장자를 추출한다.
+     * 업로드 파일명에서 확장자를 추출한다.
      */
     private String getExtension(String originalFilename) {
         if (originalFilename == null) {
@@ -109,7 +154,6 @@ public class S3ImageStorage implements ImageStorage {
         }
 
         int dotIndex = originalFilename.lastIndexOf('.');
-
         if (dotIndex < 0) {
             return "";
         }

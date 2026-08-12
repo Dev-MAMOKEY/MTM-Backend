@@ -50,3 +50,17 @@ aws:
   region: ap-northeast-2
   s3:
     bucket: mtm-images-260811
+
+# 이미지 생성 공급자 — NONE / GEMINI / OPENAI
+image-generation:
+  provider: ${IMAGE_GENERATION_PROVIDER:NONE}
+
+# Gemini 이미지 생성
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash-image}
+
+# OpenAI 이미지 생성
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  model: ${OPENAI_IMAGE_MODEL:gpt-image-2}
