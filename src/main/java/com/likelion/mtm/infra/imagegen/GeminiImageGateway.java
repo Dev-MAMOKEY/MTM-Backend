@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "gemini", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "image-generation", name = "provider", havingValue = "GEMINI")
 public class GeminiImageGateway implements ImageGenerationGateway {
 
     private final Client client;
@@ -67,10 +67,17 @@ public class GeminiImageGateway implements ImageGenerationGateway {
         List<Part> parts = new ArrayList<>();
         parts.add(Part.fromText(request.prompt()));
         request.images().stream()
-                .map(image -> Part.fromBytes(image.data(), image.mimeType()))
+                .map(image -> Part.fromBytes(image.data(), normalizeMimeType(image.mimeType())))
                 .forEach(parts::add);
 
         return Content.fromParts(parts.toArray(Part[]::new));
+    }
+
+    /**
+     * 비표준 JPEG MIME 타입을 Gemini가 기대하는 표준 값으로 정규화한다.
+     */
+    private String normalizeMimeType(String mimeType) {
+        return "image/jpg".equals(mimeType) ? "image/jpeg" : mimeType;
     }
 
     /**

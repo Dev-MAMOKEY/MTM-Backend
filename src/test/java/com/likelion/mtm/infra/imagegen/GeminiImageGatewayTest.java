@@ -45,6 +45,26 @@ class GeminiImageGatewayTest {
     }
 
     @Test
+    @DisplayName("입력 이미지 MIME 타입을 Gemini 표준 값으로 전달한다")
+    void normalizeInputMimeTypes() {
+        ImageGenerationRequest request = new ImageGenerationRequest(
+                List.of(
+                        new ImageInput("jpg".getBytes(), "image/jpg"),
+                        new ImageInput("jpeg".getBytes(), "image/jpeg"),
+                        new ImageInput("png".getBytes(), "image/png"),
+                        new ImageInput("webp".getBytes(), "image/webp")
+                ),
+                "prompt"
+        );
+
+        List<Part> parts = gateway.toContent(request).parts().orElseThrow();
+
+        assertThat(parts.subList(1, parts.size()))
+                .extracting(part -> part.inlineData().orElseThrow().mimeType().orElseThrow())
+                .containsExactly("image/jpeg", "image/jpeg", "image/png", "image/webp");
+    }
+
+    @Test
     @DisplayName("Gemini 응답의 image inline data를 생성 이미지로 변환한다")
     void parseImageResponse() {
         GenerateContentResponse response = responseWithParts(

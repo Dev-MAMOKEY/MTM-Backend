@@ -15,7 +15,7 @@ import com.likelion.mtm.infra.storage.ImageData;
 import com.likelion.mtm.infra.storage.ImageStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -28,7 +28,7 @@ import java.util.Optional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "gemini", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("!('${image-generation.provider:NONE}'.equalsIgnoreCase('NONE'))")
 public class BaseImageService {
 
     private static final String BASE_IMAGE_DIRECTORY = "base-images";

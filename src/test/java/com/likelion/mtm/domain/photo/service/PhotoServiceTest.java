@@ -138,6 +138,38 @@ class PhotoServiceTest {
     }
 
     @Test
+    @DisplayName("지원하지 않는 GIF와 SVG 이미지를 업로드하면 INVALID_IMAGE_FILE 예외가 발생한다")
+    void uploadUnsupportedImageType() {
+        List<MockMultipartFile> unsupportedFiles = List.of(
+                new MockMultipartFile(
+                        "file",
+                        "photo.gif",
+                        "image/gif",
+                        "gif-data".getBytes()
+                ),
+                new MockMultipartFile(
+                        "file",
+                        "photo.svg",
+                        "image/svg+xml",
+                        "svg-data".getBytes()
+                )
+        );
+
+        for (MockMultipartFile unsupportedFile : unsupportedFiles) {
+            assertThatThrownBy(() -> photoService.upload(1L, unsupportedFile))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.INVALID_IMAGE_FILE);
+        }
+
+        verifyNoInteractions(
+                memberRepository,
+                photoRepository,
+                imageStorage
+        );
+    }
+
+    @Test
     @DisplayName("회원의 사진첩을 최신순으로 조회한다")
     void getPhotos() {
         // given

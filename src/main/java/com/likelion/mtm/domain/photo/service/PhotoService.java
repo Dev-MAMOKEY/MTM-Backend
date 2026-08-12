@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 원본 사진 업로드와 사진첩 조회 비즈니스 로직을 담당한다.
@@ -21,6 +22,13 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PhotoService {
+
+    private static final Set<String> SUPPORTED_IMAGE_MIME_TYPES = Set.of(
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp"
+    );
 
     private final MemberRepository memberRepository;
     private final PhotoRepository photoRepository;
@@ -89,7 +97,7 @@ public class PhotoService {
 
         String contentType = file.getContentType();
 
-        if (contentType == null || !contentType.startsWith("image/")) {
+        if (contentType == null || !SUPPORTED_IMAGE_MIME_TYPES.contains(contentType)) {
             throw new CustomException(ErrorCode.INVALID_IMAGE_FILE);
         }
     }

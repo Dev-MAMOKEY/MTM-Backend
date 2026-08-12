@@ -23,6 +23,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'com.google.genai:google-genai:1.65.0'
+	implementation 'com.openai:openai-java:4.50.0'
 
 	// AWS SDK for Java v2
 	implementation platform('software.amazon.awssdk:bom:2.51.2')

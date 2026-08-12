@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
  * Gemini API 클라이언트를 운영 설정에 따라 구성한다.
  */
 @Configuration
-@ConditionalOnProperty(prefix = "gemini", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "image-generation", name = "provider", havingValue = "GEMINI")
 public class GeminiConfig {
 
     /**
@@ -18,6 +18,12 @@ public class GeminiConfig {
      */
     @Bean
     public Client geminiClient(@Value("${gemini.api-key}") String apiKey) {
+        if (apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "GEMINI_API_KEY는 IMAGE_GENERATION_PROVIDER=GEMINI일 때 필수입니다."
+            );
+        }
+
         return Client.builder()
                 .apiKey(apiKey)
                 .build();

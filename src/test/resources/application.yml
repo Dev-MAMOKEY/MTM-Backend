@@ -26,5 +26,5 @@ aws:
   s3:
     bucket: test-bucket
 
-gemini:
-  enabled: false
+image-generation:
+  provider: NONE
