@@ -89,8 +89,10 @@ public class WornImageService {
                 WORN_IMAGE_DIRECTORY
         );
 
+        String imageUrl;
         WornImage savedWornImage;
         try {
+            imageUrl = imageStorage.getUrl(newStorageKey);
             savedWornImage = persistenceService.finalizeCreation(
                     baseImageId,
                     product,
@@ -105,7 +107,7 @@ public class WornImageService {
 
         return WornImageResponse.from(
                 savedWornImage,
-                imageStorage.getUrl(savedWornImage.getStorageKey())
+                imageUrl
         );
     }
 

@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -234,7 +235,9 @@ class WornImageServiceTest {
         assertThat(request.images().get(1).data()).isEqualTo("product-cut".getBytes());
 
         verify(imageStorage).store(any(ImageData.class), eq("worn-images"));
-        verify(persistenceService).finalizeCreation(
+        var finalizationOrder = inOrder(imageStorage, persistenceService);
+        finalizationOrder.verify(imageStorage).getUrl("worn-images/generated");
+        finalizationOrder.verify(persistenceService).finalizeCreation(
                 20L,
                 fixture.product(),
                 fixture.productCut(),
@@ -245,10 +248,28 @@ class WornImageServiceTest {
     }
 
     @Test
+    @DisplayName("이미지 URL 생성이 실패하면 새 저장소 객체를 삭제하고 DB 저장을 확정하지 않는다")
+    void cleanUpWhenImageUrlGenerationFails() {
+        GenerationFixture fixture = stubEntities(true, dimensions(), WearType.CROSSBODY);
+        stubGeneration(fixture);
+        when(imageStorage.getUrl("worn-images/generated"))
+                .thenThrow(new CustomException(ErrorCode.IMAGE_STORAGE_ERROR));
+
+        assertThatThrownBy(() -> wornImageService.create(1L, 20L, 30L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.IMAGE_STORAGE_ERROR);
+
+        verify(imageStorage).delete("worn-images/generated");
+        verifyNoInteractions(persistenceService);
+    }
+
+    @Test
     @DisplayName("데이터베이스 저장 확정이 실패하면 새로 저장한 착용 이미지를 삭제한다")
     void cleanUpWhenFinalizationFails() {
         GenerationFixture fixture = stubEntities(true, dimensions(), WearType.CROSSBODY);
         stubGeneration(fixture);
+        when(imageStorage.getUrl("worn-images/generated")).thenReturn("worn-image-url");
         when(persistenceService.finalizeCreation(
                 20L,
                 fixture.product(),
