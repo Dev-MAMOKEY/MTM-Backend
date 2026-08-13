@@ -39,6 +39,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -129,7 +130,7 @@ class WornImageServiceTest {
     void rejectMissingProduct() {
         BaseImage baseImage = baseImage(20L, member(1L, true));
         when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
-        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(false);
+        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L)).thenReturn(Optional.empty());
         when(productRepository.findById(30L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> wornImageService.create(1L, 20L, 30L))
@@ -176,7 +177,7 @@ class WornImageServiceTest {
         BaseImage baseImage = baseImage(20L, member);
         Product product = product(30L, dimensions(), WearType.CROSSBODY);
         when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
-        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(false);
+        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L)).thenReturn(Optional.empty());
         when(productRepository.findById(30L)).thenReturn(Optional.of(product));
         when(productCutRepository.findFirstByProductIdAndFrontSlotTrueOrderBySlotNoAsc(30L))
                 .thenReturn(Optional.empty());
@@ -187,6 +188,39 @@ class WornImageServiceTest {
                 .isEqualTo(ErrorCode.PRODUCT_CUT_NOT_FOUND);
 
         verifyNoInteractions(imageStorage, persistenceService);
+        assertThat(imageGenerationGateway.getCallCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("이미 같은 조합의 착용 이미지가 있으면 새로 생성하지 않고 저장된 것을 즉시 반환한다")
+    void reuseExistingWornImage() {
+        Member member = member(1L, true);
+        BaseImage baseImage = baseImage(20L, member);
+        Product product = product(30L, dimensions(), WearType.CROSSBODY);
+        ProductCut productCut = productCut(31L, product);
+        WornImage existingWornImage = WornImage.create(
+                baseImage,
+                product,
+                "worn-images/existing",
+                Generator.GEMINI,
+                productCut
+        );
+        ReflectionTestUtils.setField(existingWornImage, "id", 40L);
+
+        when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
+        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L))
+                .thenReturn(Optional.of(existingWornImage));
+        when(imageStorage.getUrl("worn-images/existing")).thenReturn("existing-worn-image-url");
+
+        WornImageResponse response = wornImageService.create(1L, 20L, 30L);
+
+        assertThat(response.id()).isEqualTo(40L);
+        assertThat(response.imageUrl()).isEqualTo("existing-worn-image-url");
+        assertThat(response.generator()).isEqualTo(Generator.GEMINI);
+
+        verifyNoInteractions(productRepository, productCutRepository, promptAssembler, persistenceService);
+        verify(imageStorage, never()).load(anyString());
+        verify(imageStorage, never()).store(any(ImageData.class), anyString());
         assertThat(imageGenerationGateway.getCallCount()).isZero();
     }
 
@@ -298,7 +332,7 @@ class WornImageServiceTest {
         ProductCut productCut = productCut(31L, product);
 
         when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
-        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(false);
+        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L)).thenReturn(Optional.empty());
         when(productRepository.findById(30L)).thenReturn(Optional.of(product));
         when(productCutRepository.findFirstByProductIdAndFrontSlotTrueOrderBySlotNoAsc(30L))
                 .thenReturn(Optional.of(productCut));
