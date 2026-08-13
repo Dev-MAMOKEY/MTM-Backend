@@ -94,7 +94,7 @@ CREATE TABLE product (
     name                  VARCHAR(255)   NOT NULL                COMMENT '제품명 — 목록 화면에 표시',
     color                 VARCHAR(100)   NULL                    COMMENT '색상',
     price                 DECIMAL(10,2)  NOT NULL                COMMENT '가격 — 목록 화면에 표시',
-    currency              ENUM('KRW')    NOT NULL DEFAULT 'KRW'  COMMENT '통화 — ISO 4217. 현재 KRW만 취급 (해외 크롤링 추가 시 값 확장)',
+    currency              ENUM('KRW','USD')    NOT NULL DEFAULT 'KRW'  COMMENT '통화 — ISO 4217. 크롤링 원본 통화를 환산 없이 그대로 저장한다',
     description           TEXT           NULL                    COMMENT '제품 상세 원문 — Approximately D x W x H inches, 실측 치수 파서의 입력',
     dimension_depth_in    DECIMAL(5,2)   NULL                    COMMENT '실측 깊이 (인치) — 원문이 인치라 그대로 저장',
     dimension_width_in    DECIMAL(5,2)   NULL                    COMMENT '실측 너비 (인치)',
