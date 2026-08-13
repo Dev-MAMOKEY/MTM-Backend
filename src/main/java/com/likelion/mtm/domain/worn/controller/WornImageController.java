@@ -33,17 +33,19 @@ public class WornImageController {
 
     /**
      * 로그인 회원의 기준 이미지와 선택한 제품으로 착용 이미지를 생성한다.
+     * 이미 같은 조합의 착용 이미지가 있으면 새로 생성하지 않고 저장된 것을 즉시 반환한다.
      */
     @Operation(
             summary = "착용 이미지 생성",
-            description = "기준 이미지와 선택한 제품의 정면 제품 컷을 사용해 착용 이미지를 생성하고 저장한다."
+            description = "기준 이미지와 선택한 제품의 정면 제품 컷을 사용해 착용 이미지를 생성하고 저장한다. "
+                    + "이미 같은 조합(기준 이미지, 제품)의 착용 이미지가 있으면 새로 생성하지 않고 저장된 것을 즉시 반환한다."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "생성 성공"),
+            @ApiResponse(responseCode = "200", description = "생성 성공 또는 이미 생성된 착용 이미지를 즉시 반환"),
             @ApiResponse(responseCode = "400", description = "신체 정보, 제품 실측 치수 또는 착용 방식이 없음"),
             @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨"),
             @ApiResponse(responseCode = "404", description = "기준 이미지, 제품 또는 제품 컷이 없거나 기준 이미지가 본인 소유가 아님"),
-            @ApiResponse(responseCode = "409", description = "동일한 기준 이미지와 제품의 착용 이미지가 이미 존재함"),
+            @ApiResponse(responseCode = "409", description = "동시 요청으로 동일 조합이 먼저 저장되어 충돌함(드묾)"),
             @ApiResponse(responseCode = "500", description = "이미지 저장 실패"),
             @ApiResponse(responseCode = "502", description = "이미지 생성 모델 호출 실패")
     })

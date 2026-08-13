@@ -30,9 +30,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 기준 이미지와 제품 컷으로 착용 이미지를 생성하는 전체 흐름을 조정한다.
+ * 이미 만들어진 (기준 이미지, 제품) 조합은 새로 생성하지 않고 저장된 것을 즉시 돌려준다.
  */
 @Slf4j
 @Service
@@ -54,12 +56,15 @@ public class WornImageService {
 
     /**
      * 로그인 회원의 기준 이미지에 선택한 제품을 착용한 이미지를 생성하고 저장한다.
+     * 이미 같은 조합으로 만든 착용 이미지가 있으면 새로 생성하지 않고 즉시 그것을 반환한다.
      */
     public WornImageResponse create(Long memberId, Long baseImageId, Long productId) {
         BaseImage baseImage = findOwnedBaseImage(memberId, baseImageId);
 
-        if (wornImageRepository.existsByBaseImageIdAndProductId(baseImageId, productId)) {
-            throw new CustomException(ErrorCode.WORN_IMAGE_ALREADY_EXISTS);
+        Optional<WornImage> existingWornImage =
+                wornImageRepository.findByBaseImageIdAndProductId(baseImageId, productId);
+        if (existingWornImage.isPresent()) {
+            return reuse(existingWornImage.get());
         }
 
         Product product = productRepository.findById(productId)
@@ -109,6 +114,14 @@ public class WornImageService {
                 savedWornImage,
                 imageUrl
         );
+    }
+
+    /**
+     * 이미 생성된 조합이면 프롬프트 조립·AI 호출·스토리지 저장 없이
+     * 저장된 착용 이미지의 접근 URL만 얻어 즉시 반환한다.
+     */
+    private WornImageResponse reuse(WornImage wornImage) {
+        return WornImageResponse.from(wornImage, imageStorage.getUrl(wornImage.getStorageKey()));
     }
 
     /**
