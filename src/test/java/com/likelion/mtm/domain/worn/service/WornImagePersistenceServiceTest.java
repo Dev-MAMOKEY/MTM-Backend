@@ -99,6 +99,49 @@ class WornImagePersistenceServiceTest {
         verify(wornImageRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("착용 이미지 행을 잠근 뒤 저장소 키를 교체하고 교체 전 키를 함께 돌려준다")
+    void replaceStorageKeyAfterLockingWornImage() {
+        Fixture fixture = fixture();
+        WornImage existing = WornImage.create(
+                fixture.baseImage(), fixture.product(), "worn-images/old", Generator.GEMINI, fixture.productCut()
+        );
+        when(wornImageRepository.findByBaseImageIdAndProductIdForUpdate(20L, 30L))
+                .thenReturn(Optional.of(existing));
+
+        WornImagePersistenceService.RegenerationResult result = persistenceService.finalizeRegeneration(
+                20L,
+                30L,
+                "worn-images/regenerated",
+                Generator.OPENAI,
+                fixture.productCut()
+        );
+
+        assertThat(result.previousStorageKey()).isEqualTo("worn-images/old");
+        assertThat(result.wornImage()).isSameAs(existing);
+        assertThat(existing.getStorageKey()).isEqualTo("worn-images/regenerated");
+        assertThat(existing.getGenerator()).isEqualTo(Generator.OPENAI);
+        verify(wornImageRepository).findByBaseImageIdAndProductIdForUpdate(20L, 30L);
+    }
+
+    @Test
+    @DisplayName("다시 만들 착용 이미지가 없으면 WORN_IMAGE_NOT_FOUND를 던진다")
+    void rejectRegenerationWhenWornImageMissing() {
+        when(wornImageRepository.findByBaseImageIdAndProductIdForUpdate(20L, 30L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> persistenceService.finalizeRegeneration(
+                20L,
+                30L,
+                "worn-images/regenerated",
+                Generator.OPENAI,
+                null
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORN_IMAGE_NOT_FOUND);
+    }
+
     private Fixture fixture() {
         Member member = Member.register("member@example.com", "password-hash");
         Photo photo = Photo.upload(member, "photos/source");
