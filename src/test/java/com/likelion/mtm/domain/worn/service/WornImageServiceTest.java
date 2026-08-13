@@ -318,10 +318,96 @@ class WornImageServiceTest {
         verify(imageStorage).delete("worn-images/generated");
     }
 
+    @Test
+    @DisplayName("다시 만들 착용 이미지가 없으면 이미지 생성 전에 거부한다")
+    void rejectRegenerateWhenWornImageMissing() {
+        BaseImage baseImage = baseImage(20L, member(1L, true));
+        when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
+        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(false);
+
+        assertThatThrownBy(() -> wornImageService.regenerate(1L, 20L, 30L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORN_IMAGE_NOT_FOUND);
+
+        verifyNoInteractions(productRepository, productCutRepository, imageStorage, persistenceService);
+        assertThat(imageGenerationGateway.getCallCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("이미 있는 조합을 다시 만들면 새로 생성해 교체하고 이전 저장소 객체를 정리한다")
+    void regenerateWornImage() {
+        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(true);
+        GenerationFixture fixture = stubProductLookup(true, dimensions(), WearType.CROSSBODY);
+        stubGeneration(fixture);
+
+        WornImage replacedWornImage = WornImage.create(
+                fixture.baseImage(),
+                fixture.product(),
+                "worn-images/generated",
+                Generator.GEMINI,
+                fixture.productCut()
+        );
+        ReflectionTestUtils.setField(replacedWornImage, "id", 40L);
+        when(persistenceService.finalizeRegeneration(
+                20L,
+                30L,
+                "worn-images/generated",
+                Generator.GEMINI,
+                fixture.productCut()
+        )).thenReturn(new WornImagePersistenceService.RegenerationResult(replacedWornImage, "worn-images/old"));
+        when(imageStorage.getUrl("worn-images/generated")).thenReturn("worn-image-url");
+
+        WornImageResponse response = wornImageService.regenerate(1L, 20L, 30L);
+
+        assertThat(response.id()).isEqualTo(40L);
+        assertThat(response.imageUrl()).isEqualTo("worn-image-url");
+
+        verify(imageStorage).delete("worn-images/old");
+        verify(imageStorage, never()).delete("worn-images/generated");
+    }
+
+    @Test
+    @DisplayName("재생성 확정이 실패하면 새로 저장한 착용 이미지를 삭제하고 이전 것은 그대로 둔다")
+    void cleanUpWhenRegenerationFinalizationFails() {
+        when(wornImageRepository.existsByBaseImageIdAndProductId(20L, 30L)).thenReturn(true);
+        GenerationFixture fixture = stubProductLookup(true, dimensions(), WearType.CROSSBODY);
+        stubGeneration(fixture);
+        when(persistenceService.finalizeRegeneration(
+                20L,
+                30L,
+                "worn-images/generated",
+                Generator.GEMINI,
+                fixture.productCut()
+        )).thenThrow(new CustomException(ErrorCode.WORN_IMAGE_NOT_FOUND));
+
+        assertThatThrownBy(() -> wornImageService.regenerate(1L, 20L, 30L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORN_IMAGE_NOT_FOUND);
+
+        verify(imageStorage).delete("worn-images/generated");
+    }
+
     /**
      * 착용 이미지 생성 전 조회되는 기준 이미지, 제품과 정면 제품 컷을 준비한다.
+     * "이미 본 제품은 즉시 다시 뜬다"를 위한 재사용 조회는 없다고 스텁한다.
      */
     private GenerationFixture stubEntities(
+            boolean withBodyInfo,
+            Dimensions dimensions,
+            WearType wearType
+    ) {
+        GenerationFixture fixture = stubProductLookup(withBodyInfo, dimensions, wearType);
+        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L)).thenReturn(Optional.empty());
+        return fixture;
+    }
+
+    /**
+     * 착용 이미지 생성 전 조회되는 기준 이미지, 제품과 정면 제품 컷만 준비한다.
+     * 재생성은 재사용 조회 대신 존재 여부만 확인하므로 그 스텁 없이 재사용한다.
+     */
+    private GenerationFixture stubProductLookup(
             boolean withBodyInfo,
             Dimensions dimensions,
             WearType wearType
@@ -332,7 +418,6 @@ class WornImageServiceTest {
         ProductCut productCut = productCut(31L, product);
 
         when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
-        when(wornImageRepository.findByBaseImageIdAndProductId(20L, 30L)).thenReturn(Optional.empty());
         when(productRepository.findById(30L)).thenReturn(Optional.of(product));
         when(productCutRepository.findFirstByProductIdAndFrontSlotTrueOrderBySlotNoAsc(30L))
                 .thenReturn(Optional.of(productCut));
