@@ -38,6 +38,7 @@ public enum ErrorCode {
     PRODUCT_DIMENSIONS_REQUIRED(HttpStatus.BAD_REQUEST, "PRODUCT_DIMENSIONS_REQUIRED", "착용 이미지 생성에는 제품 실측 치수가 필요합니다."),
     PRODUCT_WEAR_TYPE_REQUIRED(HttpStatus.BAD_REQUEST, "PRODUCT_WEAR_TYPE_REQUIRED", "착용 이미지 생성에는 제품 착용 방식이 필요합니다."),
     WORN_IMAGE_ALREADY_EXISTS(HttpStatus.CONFLICT, "WORN_IMAGE_ALREADY_EXISTS", "해당 기준 이미지와 제품의 착용 이미지가 이미 존재합니다."),
+    WORN_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "WORN_IMAGE_NOT_FOUND", "다시 만들 착용 이미지가 존재하지 않습니다."),
 
     // 토큰
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "토큰이 만료되었습니다."),

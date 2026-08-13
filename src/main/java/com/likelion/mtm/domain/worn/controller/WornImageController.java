@@ -61,4 +61,35 @@ public class WornImageController {
                 )
         );
     }
+
+    /**
+     * 로그인 회원의 (기준 이미지, 제품) 조합으로 이미 만든 착용 이미지를 새로 생성해 교체한다.
+     * 새 행을 만들지 않고 기존 착용 이미지를 교체하며, 대상이 없으면 실패한다.
+     */
+    @Operation(
+            summary = "착용 이미지 재생성",
+            description = "이미 만든 (기준 이미지, 제품) 조합의 착용 이미지를 새로 생성해 기존 것을 교체한다. "
+                    + "새 행을 만들지 않고 저장된 착용 이미지를 교체하며, 다시 만들 대상이 없으면 실패한다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "재생성 성공, 교체된 착용 이미지를 반환"),
+            @ApiResponse(responseCode = "400", description = "신체 정보, 제품 실측 치수 또는 착용 방식이 없음"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨"),
+            @ApiResponse(responseCode = "404", description = "기준 이미지·제품·제품 컷이 없거나, 다시 만들 착용 이미지가 없거나, "
+                    + "기준 이미지가 본인 소유가 아님"),
+            @ApiResponse(responseCode = "500", description = "이미지 저장 실패"),
+            @ApiResponse(responseCode = "502", description = "이미지 생성 모델 호출 실패")
+    })
+    @PostMapping("/{baseImageId}/worn-images/regenerate")
+    public ResponseEntity<RsData<WornImageResponse>> regenerateWornImage(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable("baseImageId") Long baseImageId,
+            @Valid @RequestBody WornImageCreateRequest request
+    ) {
+        return ResponseEntity.ok(
+                RsData.success(
+                        wornImageService.regenerate(memberId, baseImageId, request.productId())
+                )
+        );
+    }
 }

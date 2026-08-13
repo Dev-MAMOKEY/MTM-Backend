@@ -67,32 +67,12 @@ public class WornImageService {
             return reuse(existingWornImage.get());
         }
 
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND));
-        ProductCut productCut = productCutRepository
-                .findFirstByProductIdAndFrontSlotTrueOrderBySlotNoAsc(productId)
-                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_CUT_NOT_FOUND));
-
+        Product product = findProduct(productId);
+        ProductCut productCut = findFrontProductCut(productId);
         Member member = baseImage.getPhoto().getMember();
         validateGenerationData(member, product);
 
-        ImageData baseImageData = imageStorage.load(baseImage.getStorageKey());
-        ImageData productCutData = imageStorage.load(productCut.getStorageKey());
-        String prompt = promptAssembler.assemble(member, product);
-        GeneratedImage generatedImage = imageGenerationGateway.generate(
-                new ImageGenerationRequest(
-                        List.of(
-                                new ImageInput(baseImageData.data(), baseImageData.mimeType()),
-                                new ImageInput(productCutData.data(), productCutData.mimeType())
-                        ),
-                        prompt
-                )
-        );
-
-        String newStorageKey = imageStorage.store(
-                new ImageData(generatedImage.data(), generatedImage.mimeType()),
-                WORN_IMAGE_DIRECTORY
-        );
+        String newStorageKey = generateWornImage(baseImage, product, productCut, member);
 
         String imageUrl;
         WornImage savedWornImage;
@@ -117,11 +97,91 @@ public class WornImageService {
     }
 
     /**
+     * 로그인 회원의 (기준 이미지, 제품) 조합으로 이미 만든 착용 이미지를 새로 생성해 교체한다.
+     * 대상이 없으면 다시 만들 수 없으므로 거부한다.
+     */
+    public WornImageResponse regenerate(Long memberId, Long baseImageId, Long productId) {
+        BaseImage baseImage = findOwnedBaseImage(memberId, baseImageId);
+
+        if (!wornImageRepository.existsByBaseImageIdAndProductId(baseImageId, productId)) {
+            throw new CustomException(ErrorCode.WORN_IMAGE_NOT_FOUND);
+        }
+
+        Product product = findProduct(productId);
+        ProductCut productCut = findFrontProductCut(productId);
+        Member member = baseImage.getPhoto().getMember();
+        validateGenerationData(member, product);
+
+        String newStorageKey = generateWornImage(baseImage, product, productCut, member);
+
+        String imageUrl;
+        WornImagePersistenceService.RegenerationResult result;
+        try {
+            result = persistenceService.finalizeRegeneration(
+                    baseImageId,
+                    productId,
+                    newStorageKey,
+                    currentGenerator(),
+                    productCut
+            );
+            imageUrl = imageStorage.getUrl(newStorageKey);
+        } catch (RuntimeException e) {
+            deleteQuietly(newStorageKey);
+            throw e;
+        }
+
+        deleteQuietly(result.previousStorageKey());
+
+        return WornImageResponse.from(result.wornImage(), imageUrl);
+    }
+
+    /**
      * 이미 생성된 조합이면 프롬프트 조립·AI 호출·스토리지 저장 없이
      * 저장된 착용 이미지의 접근 URL만 얻어 즉시 반환한다.
      */
     private WornImageResponse reuse(WornImage wornImage) {
         return WornImageResponse.from(wornImage, imageStorage.getUrl(wornImage.getStorageKey()));
+    }
+
+    /**
+     * 식별자로 제품을 조회한다.
+     */
+    private Product findProduct(Long productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND));
+    }
+
+    /**
+     * 제품의 정면 제품 컷을 조회한다.
+     */
+    private ProductCut findFrontProductCut(Long productId) {
+        return productCutRepository
+                .findFirstByProductIdAndFrontSlotTrueOrderBySlotNoAsc(productId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_CUT_NOT_FOUND));
+    }
+
+    /**
+     * 기준 이미지와 제품 컷을 입력으로 프롬프트를 조립해 착용 이미지를 생성하고 저장한 뒤
+     * 새 저장소 키를 돌려준다. 생성·신규 저장뿐이고 데이터베이스 확정은 호출자의 몫이다.
+     */
+    private String generateWornImage(BaseImage baseImage, Product product, ProductCut productCut, Member member) {
+        ImageData baseImageData = imageStorage.load(baseImage.getStorageKey());
+        ImageData productCutData = imageStorage.load(productCut.getStorageKey());
+        String prompt = promptAssembler.assemble(member, product);
+        GeneratedImage generatedImage = imageGenerationGateway.generate(
+                new ImageGenerationRequest(
+                        List.of(
+                                new ImageInput(baseImageData.data(), baseImageData.mimeType()),
+                                new ImageInput(productCutData.data(), productCutData.mimeType())
+                        ),
+                        prompt
+                )
+        );
+
+        return imageStorage.store(
+                new ImageData(generatedImage.data(), generatedImage.mimeType()),
+                WORN_IMAGE_DIRECTORY
+        );
     }
 
     /**

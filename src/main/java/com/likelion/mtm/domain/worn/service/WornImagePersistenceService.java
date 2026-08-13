@@ -45,4 +45,35 @@ public class WornImagePersistenceService {
                 WornImage.create(lockedBaseImage, product, storageKey, generator, productCut)
         );
     }
+
+    /**
+     * 착용 이미지 행을 잠근 뒤 새 저장소 키로 교체한다. 새 행을 만들지 않고 기존 행을 갱신한다.
+     * 교체 전 저장소 키를 함께 돌려줘 호출자가 트랜잭션 밖에서 옛 파일을 정리할 수 있게 한다.
+     */
+    @Transactional
+    public RegenerationResult finalizeRegeneration(
+            Long baseImageId,
+            Long productId,
+            String newStorageKey,
+            Generator generator,
+            ProductCut productCut
+    ) {
+        WornImage lockedWornImage = wornImageRepository
+                .findByBaseImageIdAndProductIdForUpdate(baseImageId, productId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORN_IMAGE_NOT_FOUND));
+
+        String previousStorageKey = lockedWornImage.getStorageKey();
+        lockedWornImage.replaceImage(newStorageKey, generator, productCut);
+
+        return new RegenerationResult(lockedWornImage, previousStorageKey);
+    }
+
+    /**
+     * 재생성 확정 결과와 정리 대상인 교체 전 저장소 키를 함께 전달한다.
+     */
+    public record RegenerationResult(
+            WornImage wornImage,
+            String previousStorageKey
+    ) {
+    }
 }
