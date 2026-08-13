@@ -1,0 +1,63 @@
+package com.likelion.mtm.domain.member.controller;
+
+import com.likelion.mtm.domain.member.dto.BodyInfoRequestDTO;
+import com.likelion.mtm.domain.member.dto.BodyInfoUpdateRequestDTO;
+import com.likelion.mtm.domain.member.dto.MemberResponseDTO;
+import com.likelion.mtm.domain.member.service.MemberService;
+import com.likelion.mtm.global.rsdata.RsData;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+/** 회원 API — 로그인한 회원이 자기 정보를 다루는 엔드포인트 */
+@Tag(name = "회원", description = "내 정보 조회 · 신체 정보")
+@RestController
+@RequestMapping("/api/v1/members")
+@RequiredArgsConstructor
+public class MemberController {
+
+    private final MemberService memberService;
+
+    @Operation(summary = "내 정보 조회", description = "액세스 토큰으로 식별된 회원의 정보를 돌려준다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨")
+    })
+    @GetMapping("/me")
+    public ResponseEntity<RsData<MemberResponseDTO>> getMyInfo(@AuthenticationPrincipal Long memberId) {
+        // memberId는 JwtAuthenticationFilter가 SecurityContext에 넣어 둔 값이다
+        return ResponseEntity.ok(RsData.success(memberService.getMyInfo(memberId)));
+    }
+
+    @Operation(summary = "신체 정보 저장", description = "키와 몸무게를 저장한다. 둘 다 필수이며, 이미 값이 있으면 새 값으로 교체된다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "저장 성공"),
+            @ApiResponse(responseCode = "400", description = "값이 비었거나 범위를 벗어남"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨")
+    })
+    @PostMapping("/me/body-info")
+    public ResponseEntity<RsData<MemberResponseDTO>> saveBodyInfo(
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody BodyInfoRequestDTO request) {
+        return ResponseEntity.ok(RsData.success(memberService.saveBodyInfo(memberId, request)));
+    }
+
+    @Operation(summary = "신체 정보 수정", description = "프로필에서 키 또는 몸무게를 수정한다. 보내지 않은 값은 기존 값을 유지한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "둘 다 비었거나 범위를 벗어남"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨")
+    })
+    @PatchMapping("/me/body-info")
+    public ResponseEntity<RsData<MemberResponseDTO>> updateBodyInfo(
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody BodyInfoUpdateRequestDTO request) {
+        return ResponseEntity.ok(RsData.success(memberService.updateBodyInfo(memberId, request)));
+    }
+}
