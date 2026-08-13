@@ -58,4 +58,32 @@ class WornImageControllerTest {
         assertThat(response.getBody().error()).isNull();
         verify(wornImageService).create(1L, 20L, 30L);
     }
+
+    @Test
+    @DisplayName("착용 이미지 재생성 요청을 서비스에 전달하고 RsData 응답으로 반환한다")
+    void regenerateWornImage() {
+        WornImageResponse serviceResponse = new WornImageResponse(
+                40L,
+                20L,
+                30L,
+                31L,
+                "worn-image-regenerated-url",
+                Generator.GEMINI,
+                LocalDateTime.of(2026, 8, 13, 1, 0)
+        );
+        when(wornImageService.regenerate(1L, 20L, 30L)).thenReturn(serviceResponse);
+
+        ResponseEntity<RsData<WornImageResponse>> response = wornImageController.regenerateWornImage(
+                1L,
+                20L,
+                new WornImageCreateRequest(30L)
+        );
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isEqualTo(serviceResponse);
+        assertThat(response.getBody().error()).isNull();
+        verify(wornImageService).regenerate(1L, 20L, 30L);
+    }
 }
