@@ -35,6 +35,11 @@ custom:
     access-exp-min: ${JWT_ACCESS_EXP_MIN}
     refresh-exp-day: ${JWT_REFRESH_EXP_DAY}
 
+  # 크롤링 제품 적재기 — 평소엔 꺼두고, 적재할 때만 true로 켜서 한 번 기동한다
+  crawling:
+    enabled: ${CRAWLING_LOAD_ENABLED:false}
+    path: ${CRAWLING_DATA_PATH:crawling-data}
+
 # Swagger 설정
 springdoc:
   swagger-ui:
