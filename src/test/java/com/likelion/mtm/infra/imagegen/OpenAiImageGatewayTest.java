@@ -12,6 +12,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -133,25 +137,66 @@ class OpenAiImageGatewayTest {
     }
 
     @Test
-    @DisplayName("SDK가 part별 MIME을 표현할 수 없는 혼합 형식 다중 입력을 거부한다")
-    void rejectMultipleImagesWithDifferentMimeTypes() throws IOException {
-        ImageGenerationRequest request = new ImageGenerationRequest(
+    @DisplayName("JPEG와 PNG 혼합 입력을 공통 PNG 형식으로 변환해 OpenAI에 전달한다")
+    void normalizeMixedJpegAndPngInputs() throws IOException {
+        byte[] generatedBytes = pngBytes("generated-image");
+        ImagesResponse response = responseWithBase64(
+                Base64.getEncoder().encodeToString(generatedBytes)
+        );
+        when(client.images()).thenReturn(imageService);
+        when(imageService.edit(org.mockito.ArgumentMatchers.any(ImageEditParams.class)))
+                .thenAnswer(invocation -> {
+                    ImageEditParams params = invocation.getArgument(0);
+                    assertThat(params._image().contentType()).isEqualTo("image/png");
+                    assertThat(params._image().filename().orElseThrow()).endsWith(".png");
+                    assertThat(params.image().isInputStreams()).isTrue();
+                    assertThat(params.image().asInputStreams()).hasSize(2);
+                    for (var inputStream : params.image().asInputStreams()) {
+                        assertThat(inputStream.readNBytes(8)).isEqualTo(new byte[]{
+                                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+                        });
+                    }
+                    return response;
+                });
+
+        GeneratedImage generatedImage = gateway.generate(new ImageGenerationRequest(
                 List.of(
-                        new ImageInput("png".getBytes(), "image/png"),
-                        new ImageInput("webp".getBytes(), "image/webp")
+                        new ImageInput(imageBytes("jpeg"), "image/jpeg"),
+                        new ImageInput(imageBytes("png"), "image/png")
                 ),
                 "prompt"
-        );
-        List<Path> temporaryImages = gateway.createTemporaryImages(request.images());
+        ));
 
-        try {
-            assertThatThrownBy(() -> gateway.toParams(request, temporaryImages))
-                    .isInstanceOf(CustomException.class)
-                    .extracting("errorCode")
-                    .isEqualTo(ErrorCode.IMAGE_GENERATION_ERROR);
-        } finally {
-            gateway.deleteTemporaryImages(temporaryImages);
-        }
+        assertThat(generatedImage.data()).isEqualTo(generatedBytes);
+        verify(imageService).edit(org.mockito.ArgumentMatchers.any(ImageEditParams.class));
+    }
+
+    @Test
+    @DisplayName("WEBP와 PNG 혼합 입력도 공통 PNG 형식으로 변환한다")
+    void normalizeMixedWebpAndPngInputs() throws IOException {
+        byte[] generatedBytes = pngBytes("generated-image");
+        ImagesResponse response = responseWithBase64(
+                Base64.getEncoder().encodeToString(generatedBytes)
+        );
+        when(client.images()).thenReturn(imageService);
+        when(imageService.edit(org.mockito.ArgumentMatchers.any(ImageEditParams.class)))
+                .thenAnswer(invocation -> {
+                    ImageEditParams params = invocation.getArgument(0);
+                    assertThat(params._image().contentType()).isEqualTo("image/png");
+                    assertThat(params.image().asInputStreams()).hasSize(2);
+                    return response;
+                });
+
+        GeneratedImage generatedImage = gateway.generate(new ImageGenerationRequest(
+                List.of(
+                        new ImageInput(webpBytes(), "image/webp"),
+                        new ImageInput(imageBytes("png"), "image/png")
+                ),
+                "prompt"
+        ));
+
+        assertThat(generatedImage.data()).isEqualTo(generatedBytes);
+        verify(imageService).edit(org.mockito.ArgumentMatchers.any(ImageEditParams.class));
     }
 
     @Test
@@ -333,6 +378,24 @@ class OpenAiImageGatewayTest {
         System.arraycopy(signature, 0, png, 0, signature.length);
         System.arraycopy(payloadBytes, 0, png, signature.length, payloadBytes.length);
         return png;
+    }
+
+    private byte[] imageBytes(String format) throws IOException {
+        BufferedImage image = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        image.setRGB(0, 0, Color.RED.getRGB());
+        image.setRGB(1, 0, Color.GREEN.getRGB());
+        image.setRGB(0, 1, Color.BLUE.getRGB());
+        image.setRGB(1, 1, Color.WHITE.getRGB());
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        assertThat(ImageIO.write(image, format, outputStream)).isTrue();
+        return outputStream.toByteArray();
+    }
+
+    private byte[] webpBytes() {
+        return Base64.getDecoder().decode(
+                "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+        );
     }
 
     private void assertMultipartImage(byte[] data, String mimeType, String suffix)

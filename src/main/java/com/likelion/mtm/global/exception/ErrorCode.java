@@ -30,6 +30,15 @@ public enum ErrorCode {
     BODY_INFO_REQUIRED(HttpStatus.BAD_REQUEST, "BODY_INFO_REQUIRED", "기준 이미지 생성에는 키와 몸무게가 필요합니다."),
     IMAGE_GENERATION_ERROR(HttpStatus.BAD_GATEWAY, "IMAGE_GENERATION_ERROR", "이미지 생성에 실패했습니다."),
 
+    // 착용 이미지
+    BASE_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "BASE_IMAGE_NOT_FOUND", "존재하지 않는 기준 이미지입니다."),
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_NOT_FOUND", "존재하지 않는 제품입니다."),
+    PRODUCT_CUT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_CUT_NOT_FOUND", "착용 이미지 생성에 사용할 제품 컷이 없습니다."),
+    WORN_IMAGE_BODY_INFO_REQUIRED(HttpStatus.BAD_REQUEST, "WORN_IMAGE_BODY_INFO_REQUIRED", "착용 이미지 생성에는 키와 몸무게가 필요합니다."),
+    PRODUCT_DIMENSIONS_REQUIRED(HttpStatus.BAD_REQUEST, "PRODUCT_DIMENSIONS_REQUIRED", "착용 이미지 생성에는 제품 실측 치수가 필요합니다."),
+    PRODUCT_WEAR_TYPE_REQUIRED(HttpStatus.BAD_REQUEST, "PRODUCT_WEAR_TYPE_REQUIRED", "착용 이미지 생성에는 제품 착용 방식이 필요합니다."),
+    WORN_IMAGE_ALREADY_EXISTS(HttpStatus.CONFLICT, "WORN_IMAGE_ALREADY_EXISTS", "해당 기준 이미지와 제품의 착용 이미지가 이미 존재합니다."),
+
     // 토큰
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "토큰이 만료되었습니다."),
     TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", "유효하지 않은 토큰입니다."),
