@@ -51,4 +51,30 @@ public class BaseImageController {
                 RsData.success(baseImageService.create(memberId, photoId))
         );
     }
+
+    /**
+     * 원본 사진은 그대로 둔 채 로그인한 회원의 기준 이미지를 다시 만든다.
+     * 옛 기준 이미지 위에서 만든 착용 이미지는 새 얼굴과 맞지 않으므로 함께 삭제된다.
+     */
+    @Operation(
+            summary = "기준 이미지 재생성",
+            description = "원본 사진을 그대로 둔 채 기준 이미지만 다시 만든다. "
+                    + "재생성하면 그 기준 이미지에 딸린 착용 이미지가 모두 함께 삭제된다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "재생성 성공, 교체된 기준 이미지를 반환"),
+            @ApiResponse(responseCode = "400", description = "회원 신체 정보가 없음"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨"),
+            @ApiResponse(responseCode = "404", description = "원본 사진이 없거나 본인 소유가 아니거나, 다시 만들 기준 이미지가 없음"),
+            @ApiResponse(responseCode = "502", description = "이미지 생성 모델 호출 실패")
+    })
+    @PostMapping("/{photoId}/base-image/regenerate")
+    public ResponseEntity<RsData<BaseImageResponse>> regenerateBaseImage(
+            @AuthenticationPrincipal Long memberId,
+            @PathVariable("photoId") Long photoId
+    ) {
+        return ResponseEntity.ok(
+                RsData.success(baseImageService.regenerate(memberId, photoId))
+        );
+    }
 }
