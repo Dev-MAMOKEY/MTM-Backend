@@ -53,19 +53,7 @@ public class BaseImageService {
         Member member = photo.getMember();
         validateBodyInfo(member);
 
-        ImageData sourceImage = imageStorage.load(photo.getStorageKey());
-        String prompt = promptAssembler.assemble(member.getHeightCm(), member.getWeightKg());
-        GeneratedImage generatedImage = imageGenerationGateway.generate(
-                new ImageGenerationRequest(
-                        List.of(new ImageInput(sourceImage.data(), sourceImage.mimeType())),
-                        prompt
-                )
-        );
-
-        String newStorageKey = imageStorage.store(
-                new ImageData(generatedImage.data(), generatedImage.mimeType()),
-                BASE_IMAGE_DIRECTORY
-        );
+        String newStorageKey = generateBaseImage(photo, member);
 
         try {
             BaseImagePersistenceService.FinalizationResult result =
@@ -80,6 +68,57 @@ public class BaseImageService {
             deleteQuietly(newStorageKey);
             throw e;
         }
+    }
+
+    /**
+     * 원본 사진은 그대로 둔 채 로그인 회원 소유의 기준 이미지만 다시 만든다.
+     * 옛 기준 이미지 위의 착용 이미지는 새 얼굴과 맞지 않으므로 함께 삭제한다.
+     * 아직 기준 이미지가 없으면 다시 만들 수 없으므로 거부한다.
+     */
+    public BaseImageResponse regenerate(Long memberId, Long photoId) {
+        Photo photo = findOwnedPhoto(memberId, photoId);
+
+        if (persistenceService.findExisting(photoId).isEmpty()) {
+            throw new CustomException(ErrorCode.BASE_IMAGE_NOT_FOUND);
+        }
+
+        Member member = photo.getMember();
+        validateBodyInfo(member);
+
+        String newStorageKey = generateBaseImage(photo, member);
+
+        BaseImagePersistenceService.RegenerationResult result;
+        try {
+            result = persistenceService.finalizeRegeneration(photoId, newStorageKey);
+        } catch (RuntimeException e) {
+            deleteQuietly(newStorageKey);
+            throw e;
+        }
+
+        deleteQuietly(result.previousStorageKey());
+        result.deletedWornImageStorageKeys().forEach(this::deleteQuietly);
+
+        return result.response();
+    }
+
+    /**
+     * 원본 사진과 회원 신체 정보로 기준 이미지를 생성해 저장하고 새 저장소 키를 돌려준다.
+     * 생성·신규 저장뿐이고 데이터베이스 확정은 호출자의 몫이다.
+     */
+    private String generateBaseImage(Photo photo, Member member) {
+        ImageData sourceImage = imageStorage.load(photo.getStorageKey());
+        String prompt = promptAssembler.assemble(member.getHeightCm(), member.getWeightKg());
+        GeneratedImage generatedImage = imageGenerationGateway.generate(
+                new ImageGenerationRequest(
+                        List.of(new ImageInput(sourceImage.data(), sourceImage.mimeType())),
+                        prompt
+                )
+        );
+
+        return imageStorage.store(
+                new ImageData(generatedImage.data(), generatedImage.mimeType()),
+                BASE_IMAGE_DIRECTORY
+        );
     }
 
     /**

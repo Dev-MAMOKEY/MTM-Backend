@@ -283,6 +283,64 @@ class BaseImageServiceTest {
         return wornImage;
     }
 
+    @Test
+    @DisplayName("다시 만들 기준 이미지가 없으면 Gemini 호출 전에 거부한다")
+    void rejectRegenerateWhenBaseImageMissing() {
+        Photo photo = photo(10L, member(1L, true), "photos/source");
+        when(photoRepository.findByIdWithMember(10L)).thenReturn(Optional.of(photo));
+        when(persistenceService.findExisting(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> baseImageService.regenerate(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.BASE_IMAGE_NOT_FOUND);
+
+        assertThat(imageGenerationGateway.getCallCount()).isZero();
+        verifyNoInteractions(imageStorage);
+    }
+
+    @Test
+    @DisplayName("기준 이미지를 다시 만들면 교체하고 옛 기준 이미지와 딸린 착용 이미지를 정리한다")
+    void regenerateBaseImage() {
+        Photo photo = photo(10L, member(1L, true), "photos/source");
+        BaseImageResponse existing = response(20L, 10L, "existing-url");
+        BaseImageResponse regenerated = response(20L, 10L, "regenerated-url");
+        stubGeneration(photo);
+        when(persistenceService.findExisting(10L)).thenReturn(Optional.of(existing));
+        when(persistenceService.finalizeRegeneration(10L, "base-images/generated"))
+                .thenReturn(new BaseImagePersistenceService.RegenerationResult(
+                        regenerated,
+                        "base-images/old",
+                        List.of("worn-images/old-1", "worn-images/old-2")
+                ));
+
+        BaseImageResponse result = baseImageService.regenerate(1L, 10L);
+
+        assertThat(result).isEqualTo(regenerated);
+        verify(imageStorage).delete("base-images/old");
+        verify(imageStorage).delete("worn-images/old-1");
+        verify(imageStorage).delete("worn-images/old-2");
+        verify(imageStorage, never()).delete("base-images/generated");
+    }
+
+    @Test
+    @DisplayName("재생성 확정이 실패하면 새로 저장한 기준 이미지를 정리하고 옛 이미지는 그대로 둔다")
+    void cleanUpWhenRegenerationFinalizationFails() {
+        Photo photo = photo(10L, member(1L, true), "photos/source");
+        BaseImageResponse existing = response(20L, 10L, "existing-url");
+        stubGeneration(photo);
+        when(persistenceService.findExisting(10L)).thenReturn(Optional.of(existing));
+        when(persistenceService.finalizeRegeneration(10L, "base-images/generated"))
+                .thenThrow(new CustomException(ErrorCode.BASE_IMAGE_NOT_FOUND));
+
+        assertThatThrownBy(() -> baseImageService.regenerate(1L, 10L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.BASE_IMAGE_NOT_FOUND);
+
+        verify(imageStorage).delete("base-images/generated");
+    }
+
     private void stubGeneration(Photo photo) {
         when(photoRepository.findByIdWithMember(10L)).thenReturn(Optional.of(photo));
         when(persistenceService.findExisting(10L)).thenReturn(Optional.empty());
