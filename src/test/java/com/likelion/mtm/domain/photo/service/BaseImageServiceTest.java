@@ -6,6 +6,9 @@ import com.likelion.mtm.domain.photo.entity.BaseImage;
 import com.likelion.mtm.domain.photo.entity.Photo;
 import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
 import com.likelion.mtm.domain.photo.repository.PhotoRepository;
+import com.likelion.mtm.domain.worn.entity.Generator;
+import com.likelion.mtm.domain.worn.entity.WornImage;
+import com.likelion.mtm.domain.worn.repository.WornImageRepository;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import com.likelion.mtm.infra.imagegen.BaseImagePromptAssembler;
@@ -24,6 +27,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +50,9 @@ class BaseImageServiceTest {
 
     @Mock
     private BaseImageRepository baseImageRepository;
+
+    @Mock
+    private WornImageRepository wornImageRepository;
 
     @Mock
     private ImageStorage imageStorage;
@@ -198,7 +205,7 @@ class BaseImageServiceTest {
         when(imageStorage.getUrl("base-images/generated")).thenReturn("base-url");
 
         BaseImagePersistenceService realPersistenceService =
-                new BaseImagePersistenceService(photoRepository, baseImageRepository, imageStorage);
+                new BaseImagePersistenceService(photoRepository, baseImageRepository, wornImageRepository, imageStorage);
         BaseImagePersistenceService.FinalizationResult result =
                 realPersistenceService.finalizeCreation(10L, "base-images/generated");
 
@@ -219,13 +226,61 @@ class BaseImageServiceTest {
         when(imageStorage.getUrl("base-images/existing")).thenReturn("existing-url");
 
         BaseImagePersistenceService realPersistenceService =
-                new BaseImagePersistenceService(photoRepository, baseImageRepository, imageStorage);
+                new BaseImagePersistenceService(photoRepository, baseImageRepository, wornImageRepository, imageStorage);
         BaseImagePersistenceService.FinalizationResult result =
                 realPersistenceService.finalizeCreation(10L, "base-images/generated");
 
         assertThat(result.created()).isFalse();
         assertThat(result.response().id()).isEqualTo(20L);
         verify(baseImageRepository, never()).save(any(BaseImage.class));
+    }
+
+    @Test
+    @DisplayName("재생성 확정은 기준 이미지를 잠근 뒤 저장소 키를 교체하고 딸린 착용 이미지를 모두 삭제한다")
+    void finalizeRegenerationCascadesWornImageDeletion() {
+        Photo photo = photo(10L, member(1L, true), "photos/source");
+        BaseImage baseImage = BaseImage.create(photo, "base-images/old");
+        ReflectionTestUtils.setField(baseImage, "id", 20L);
+        WornImage wornImage1 = wornImage(baseImage, "worn-images/old-1");
+        WornImage wornImage2 = wornImage(baseImage, "worn-images/old-2");
+
+        when(baseImageRepository.findByPhotoIdForUpdate(10L)).thenReturn(Optional.of(baseImage));
+        when(wornImageRepository.deleteAllByBaseImageId(20L))
+                .thenReturn(List.of(wornImage1, wornImage2));
+        when(imageStorage.getUrl("base-images/new")).thenReturn("new-base-url");
+
+        BaseImagePersistenceService realPersistenceService =
+                new BaseImagePersistenceService(photoRepository, baseImageRepository, wornImageRepository, imageStorage);
+        BaseImagePersistenceService.RegenerationResult result =
+                realPersistenceService.finalizeRegeneration(10L, "base-images/new");
+
+        assertThat(baseImage.getStorageKey()).isEqualTo("base-images/new");
+        assertThat(result.previousStorageKey()).isEqualTo("base-images/old");
+        assertThat(result.deletedWornImageStorageKeys())
+                .containsExactlyInAnyOrder("worn-images/old-1", "worn-images/old-2");
+        assertThat(result.response().id()).isEqualTo(20L);
+        verify(wornImageRepository).deleteAllByBaseImageId(20L);
+    }
+
+    @Test
+    @DisplayName("다시 만들 기준 이미지가 없으면 재생성 확정을 거부한다")
+    void rejectRegenerationFinalizationWhenBaseImageMissing() {
+        when(baseImageRepository.findByPhotoIdForUpdate(10L)).thenReturn(Optional.empty());
+
+        BaseImagePersistenceService realPersistenceService =
+                new BaseImagePersistenceService(photoRepository, baseImageRepository, wornImageRepository, imageStorage);
+
+        assertThatThrownBy(() -> realPersistenceService.finalizeRegeneration(10L, "base-images/new"))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.BASE_IMAGE_NOT_FOUND);
+
+        verifyNoInteractions(wornImageRepository);
+    }
+
+    private WornImage wornImage(BaseImage baseImage, String storageKey) {
+        WornImage wornImage = WornImage.create(baseImage, null, storageKey, Generator.GEMINI, null);
+        return wornImage;
     }
 
     private void stubGeneration(Photo photo) {
