@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -40,4 +41,14 @@ public interface WornImageRepository extends JpaRepository<WornImage, Long> {
             @Param("baseImageId") Long baseImageId,
             @Param("productId") Long productId
     );
+
+    /**
+     * 기준 이미지에 딸린 착용 이미지를 모두 삭제하고, 정리된 것들을 돌려준다.
+     * 기준 이미지를 다시 만들면 옛 기준 이미지 위의 착용 이미지는 새 얼굴과 맞지 않으므로 함께 지운다.
+     * 반환된 목록의 저장소 키로 호출자가 트랜잭션 밖에서 파일을 정리한다.
+     *
+     * @param baseImageId 기준 이미지 식별자
+     * @return 삭제된 착용 이미지 목록
+     */
+    List<WornImage> deleteAllByBaseImageId(Long baseImageId);
 }

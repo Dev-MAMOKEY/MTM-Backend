@@ -46,6 +46,17 @@ public interface BaseImageRepository extends JpaRepository<BaseImage, Long> {
     Optional<BaseImage> findByPhotoId(Long photoId);
 
     /**
+     * 재생성 저장 확정 동안 기준 이미지 행을 비관적 쓰기 잠금으로 조회한다.
+     * "기준 이미지 다시 만들기"는 새 행이 아니라 이 행의 저장소 키를 교체한다.
+     *
+     * @param photoId 원본 사진 식별자
+     * @return 잠긴 기준 이미지
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from BaseImage b where b.photo.id = :photoId")
+    Optional<BaseImage> findByPhotoIdForUpdate(@Param("photoId") Long photoId);
+
+    /**
      * 여러 원본 사진에 연결된 기준 이미지를 한 번에 조회한다.
      *
      * @param photoIds 원본 사진 식별자 목록
