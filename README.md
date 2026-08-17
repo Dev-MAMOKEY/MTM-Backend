@@ -9,8 +9,10 @@ MCM 제품 가상 착용 서비스 — 백엔드
 회원 업로드              정자세·흰 배경                  (사진, SKU)별 저장·재사용
 ```
 
+- **배포 서비스**: http://52.79.118.19:8080
+- **API 문서(Swagger)**: http://52.79.118.19:8080/swagger-ui/index.html
 - 프론트엔드: [Dev-MAMOKEY/MTM-frontend](https://github.com/Dev-MAMOKEY/MTM-frontend)
-- PRD: [#2 PRD v2](https://github.com/Dev-MAMOKEY/MTM-backend/issues/2)
+- PRD: [#2 PRD v2](https://github.com/Dev-MAMOKEY/MTM-Backend/issues/2)
 - 용어집: [`CONTEXT.md`](./CONTEXT.md)
 - 설계 결정: [`docs/adr/0001-generative-composition.md`](./docs/adr/0001-generative-composition.md)
 
@@ -24,13 +26,33 @@ MCM 제품 가상 착용 서비스 — 백엔드
 | Framework | Spring Boot | 4.1.0 |
 | Build | Gradle (Groovy) | - |
 | ORM | Spring Data JPA | Boot 관리 |
-| DB | MySQL | 8.x |
+| DB | MySQL (AWS RDS) | 8.x |
 | 인증 | Spring Security + JWT (jjwt) | 0.13.0 |
-| 이미지 저장소 | AWS SDK for Java v2 (S3) / 로컬 파일 | BOM 2.51.2 |
+| 이미지 저장소 | AWS SDK for Java v2 (S3) | BOM 2.51.2 |
 | 이미지 생성 | Google Gen AI Java SDK (Gemini) | 1.65.0 |
-| 이미지 생성(폴백) | OpenAI Java SDK | 4.50.0 *(조건부)* |
+| 이미지 생성(폴백) | OpenAI Java SDK | 4.50.0 |
 | API 문서 | springdoc-openapi | 3.1.0 |
+| 배포 | Docker · AWS EC2 | - |
 | 테스트 | JUnit 5, Spring Boot Test, H2 | Boot 관리 |
+
+---
+
+## 구현 현황
+
+| 슬라이스 | 이슈 | 내용 | 상태 |
+|---|---|---|---|
+| 1 | #3 | 제품 목록이 화면에 뜬다 | ✅ (#24로 구현) |
+| 2 | #4 | 가입하고 로그인할 수 있다 | ✅ |
+| 3 | #5 | 신체 정보를 입력하고 저장한다 | ✅ |
+| 4 | #6 | 사진을 올리면 사진첩에 쌓인다 | ✅ |
+| 5 | #7 | 올린 사진이 기준 이미지로 바뀐다 | ✅ |
+| 6 | #8 | 제품을 고르면 착용 이미지가 만들어진다 | ✅ |
+| 7 | #9 | 이미 본 제품은 즉시 다시 뜬다 | ✅ |
+| 8 | #10 | 착용 이미지를 다시 만들 수 있다 | ✅ |
+| 9 | #11 | 기준 이미지를 다시 만들면 착용 이미지가 정리된다 | ✅ |
+| 10 | #12 | OpenAI로 갈아끼워 비교한다 | 🔄 전환 구현 완료, 공급자 비교·선정 진행 중 |
+
+MCM 제품 **30 SKU**와 제품 컷 **231장**이 적재되어 있다.
 
 ---
 
@@ -41,31 +63,36 @@ com.likelion.mtm
 ├── MtmApplication.java
 │
 ├── global                          # 도메인 공통
-│   ├── config                      # SecurityConfig, SwaggerConfig, JpaAuditingConfig
-│   ├── common                      # RsData<T>, PageResponseDTO<T>, BaseTimeEntity
+│   ├── config                      # SecurityConfig, SwaggerConfig, JpaAuditingConfig,
+│   │                               # S3Config, GeminiConfig, OpenAiConfig, ImageGenerationConfig
+│   ├── common                      # BaseTimeEntity
+│   ├── rsdata                      # RsData<T>
 │   ├── exception                   # CustomException, ErrorCode, GlobalExceptionHandler
-│   └── security                    # JwtProvider, JwtAuthenticationFilter, JwtAuthenticationEntryPoint
+│   └── security                    # JwtProvider, JwtAuthenticationFilter,
+│                                   # JwtAuthenticationEntryPoint, JwtAccessDeniedHandler
 │
 ├── domain
-│   ├── member                      # 회원 · 인증 · 신체 정보          [슬라이스 2, 3]
+│   ├── member                      # 회원 · 인증 · 신체 정보               [슬라이스 2, 3]
 │   ├── product                     # 제품 · 실측 치수 파서 · 착용 방식 분류기 [슬라이스 1]
-│   ├── photo                       # 원본 사진(사진첩) · 기준 이미지    [슬라이스 4, 5, 9]
-│   └── worn                        # 착용 이미지 · 재사용 · 재생성      [슬라이스 6, 7, 8]
+│   ├── photo                       # 원본 사진(사진첩) · 기준 이미지        [슬라이스 4, 5, 9]
+│   └── worn                        # 착용 이미지 · 재사용 · 재생성          [슬라이스 6, 7, 8]
 │
 └── infra                           # 교체 가능한 외부 연동 — PRD가 요구하는 경계
     ├── storage
     │   ├── ImageStorage            # 인터페이스
-    │   ├── LocalImageStorage       # 개발용
-    │   └── S3ImageStorage          # 배포용
+    │   ├── S3ImageStorage          # 구현체
+    │   └── ImageData               # 이미지 바이너리 + MIME 타입
     └── imagegen
         ├── ImageGenerationGateway  # 인터페이스
         ├── GeminiImageGateway      # 주력
-        ├── OpenAiImageGateway      # 폴백 (슬라이스 10, 조건부)
-        ├── FakeImageGateway        # 테스트용
-        └── PromptAssembler         # 프롬프트 조립기
+        ├── OpenAiImageGateway      # 폴백
+        ├── BaseImagePromptAssembler   # 기준 이미지 프롬프트 조립기
+        ├── WornImagePromptAssembler   # 착용 이미지 프롬프트 조립기
+        └── ImageGenerationRequest / GeneratedImage / ImageInput / ImageGenerationProvider
 ```
 
 각 `domain` 패키지 내부는 `controller / service / repository / entity / dto`로 나눈다.
+테스트용 `FakeImageGateway`는 `src/test/java/com/likelion/mtm/infra/imagegen`에 있다.
 
 ---
 
@@ -98,7 +125,7 @@ OPENAI_API_KEY=
 ./gradlew bootRun
 ```
 
-Swagger — http://localhost:8080/swagger-ui.html
+Swagger — http://localhost:8080/swagger-ui/index.html
 
 ### 3. 배포
 
@@ -233,13 +260,12 @@ Repository  DB 접근
 - 모든 응답은 `RsData<T>`로 감싼다.
 - 예외는 `CustomException` + `ErrorCode`를 던지고 `GlobalExceptionHandler`가 처리한다.
 - **내부 예외 메시지를 그대로 응답에 노출하지 않는다.**
-- 페이징 응답은 `PageResponseDTO<T>`로 감싼다. **Spring의 `Page`를 직접 노출하지 않는다.**
 
 ### 엔티티와 DTO
 
 - 엔티티 → DTO 변환은 DTO의 정적 메서드 `from()`
 - DTO → 엔티티 변환은 `toEntity()`
-- **엔티티에 `@Setter`를 붙이지 않는다.** 의미 있는 메서드로 상태를 바꾼다 (`updateBodyInfo()`, `replaceBaseImage()` 등)
+- **엔티티에 `@Setter`를 붙이지 않는다.** 의미 있는 메서드로 상태를 바꾼다 (`updateBodyInfo()`, `replaceStorageKey()` 등)
 - 공통 시간 컬럼은 `BaseTimeEntity` 상속
 
 ### 트랜잭션
@@ -258,7 +284,7 @@ Repository  DB 접근
   ```java
   // O
   @PathVariable("id") Long id
-  // X — IntelliJ 실행 시 500 (아래 트러블슈팅 1번)
+  // X — IntelliJ 실행 시 500
   @PathVariable Long id
   ```
 
@@ -282,19 +308,11 @@ Repository  DB 접근
 
 ## 작업 분배
 
-| 트랙 | 담당  | 슬라이스 |
-|---|-----|---|
-| A. 제품 & AI | 김동환 | #3 → #7(Gemini 구현체) → #8(프롬프트 조립기) → #12 |
-| B. 회원 & 저장소 & 배포 | 최정훈 | #4 → #5 → #6 + 스토리지 추상화 + AWS 배포 |
-| C. 이미지 파이프라인 | 유소영 | 뼈대 → #7(상위) → #8(서비스) → #9 → #10 → #11 |
+| 트랙 | 담당 | 담당한 슬라이스 |
+|---|---|---|
+| A. 회원 · 제품 · 배포 | 김동환 | #4, #5, #3(→#24), 배포 환경(#31) |
+| B. 이미지 생성 인프라 | 최정훈 | #6, #7, #8, 스토리지 추상화, AWS 인프라 |
+| C. 이미지 파이프라인 | 유소영 | ERD·엔티티, 크롤링 데이터, #9, #10, #11 |
 
-### 진행 순서
-
-```
-Phase 0  스캐폴딩 · ERD 확정 · 인터페이스 2개 합의 · API 스펙 프론트 공유 · 키 발급
-Phase 1  A:#3          B:#4          C:Fake 구현체 + 도메인 골격(테스트 먼저)
-Phase 2  A:프롬프트 스파이크  B:#5 → #6   C:#7 상위 + #9 재사용 로직
-Phase 3  실제 Gemini 연결 → #7 → #8 → #9 완료 → ⚠️ ADR 0001 재평가
-Phase 4  C:#10, #11    A:#12(조건부)   B:배포
-Phase 5  프론트 연동 마무리 · 데모 리허설
-```
+- A/B/C가 마주치는 접점은 `ImageGenerationGateway` / `ImageStorage` **인터페이스 시그니처**뿐이다. Phase 0에서 확정한 뒤 바꾸지 않는다.
+- `#10`, `#11`은 같은 파일(`domain/worn`)을 건드리므로 동시에 진행하지 않고 순서대로 처리한다.
