@@ -75,6 +75,55 @@ com.likelion.mtm
 
 레포 루트에 `.env`를 만든다. **`.env`는 커밋하지 않는다** (`.gitignore` 확인).
 
+```
+DOCKER_IMAGE={본인계정}/mtm-backend:latest
+DATABASE_URL=jdbc:mysql://{RDS엔드포인트}:3306/first_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+DATABASE_USERNAME=
+DATABASE_PASSWORD=
+JWT_SECRET={32자 이상 랜덤 문자열}
+JWT_ACCESS_EXP_MIN=60
+JWT_REFRESH_EXP_DAY=30
+IMAGE_GENERATION_PROVIDER=NONE
+GEMINI_API_KEY=
+OPENAI_API_KEY=
+```
+
+- `DATABASE_URL`은 **JDBC URL 전체**를 넣는다. 호스트만 넣으면 기동에 실패한다.
+- `IMAGE_GENERATION_PROVIDER`는 `GEMINI` / `OPENAI` / `NONE` 중 하나다. `NONE`이면 이미지 생성 기능만 빠지고 회원·사진·제품 기능은 정상 기동한다. AI 키 없이 개발할 때 쓴다.
+- **AWS 자격증명은 `.env`에 넣지 않는다.** 로컬은 `~/.aws/credentials`, 배포 서버는 EC2 IAM 역할로 주입된다.
+
+### 2. 로컬 실행
+
+```bash
+./gradlew bootRun
+```
+
+Swagger — http://localhost:8080/swagger-ui.html
+
+### 3. 배포
+
+**로컬에서 이미지를 만들어 올린다**
+
+```bash
+docker build -t {본인계정}/mtm-backend:latest .
+docker login
+docker push {본인계정}/mtm-backend:latest
+```
+
+**서버에서 받아 실행한다**
+
+서버 작업 디렉터리에 `docker-compose.yml`과 `.env`가 있어야 한다. `.env`는 깃에 없으므로 서버에서 직접 만든다.
+
+```bash
+docker compose pull
+docker compose up -d
+docker compose logs -f
+```
+
+- `restart: unless-stopped`라 서버가 재부팅돼도 컨테이너가 자동으로 올라온다.
+- `.env`에 `DOCKER_IMAGE`가 없으면 compose가 기동을 거부한다.
+- 외부 접속이 되려면 **EC2 보안 그룹과 서버 방화벽(`ufw`) 양쪽에 8080**이 열려 있어야 한다.
+
 ---
 
 ## 팀 컨벤션
