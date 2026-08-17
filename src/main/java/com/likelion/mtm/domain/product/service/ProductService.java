@@ -6,16 +6,20 @@ import com.likelion.mtm.domain.product.entity.Product;
 import com.likelion.mtm.domain.product.entity.ProductCut;
 import com.likelion.mtm.domain.product.repository.ProductCutRepository;
 import com.likelion.mtm.domain.product.repository.ProductRepository;
+import com.likelion.mtm.global.common.PageResponseDTO;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import com.likelion.mtm.infra.storage.ImageStorage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -26,21 +30,32 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ProductService {
 
+    /** 클라이언트가 과도한 size를 요청해도 한 번에 내려보내는 양을 제한한다 */
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final ProductRepository productRepository;
     private final ProductCutRepository productCutRepository;
     private final ImageStorage imageStorage;
 
     /**
-     * 제품 목록 조회. 제품이 30개 규모라 전체를 한 번에 준다.
+     * 제품 목록 조회. 적재 순서가 유지되도록 id 오름차순으로 고정한다.
      * DTO 변환까지 트랜잭션 안에서 끝낸다.
      */
-    public List<ProductResponse> getProducts() {
-        List<Product> products = productRepository.findAll();
+    public PageResponseDTO<ProductResponse> getProducts(int page, int size) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
+                Sort.by(Sort.Direction.ASC, "id")
+        );
+
+        Page<Product> productPage = productRepository.findAll(pageable);
+        List<Product> products = productPage.getContent();
+
         if (products.isEmpty()) {
-            return List.of();
+            return PageResponseDTO.from(List.of(), productPage);
         }
 
-        // 제품마다 정면 컷을 따로 조회하면 N+1이 난다. 한 번에 가져와 Map으로 묶는다
+        // 제품마다 정면 컷을 따로 조회하면 N+1이 난다. 현재 페이지 분량을 한 번에 가져와 Map으로 묶는다
         Map<Long, String> frontCutKeys = productCutRepository
                 .findAllByProductInAndFrontSlotIsTrue(products)
                 .stream()
@@ -51,9 +66,11 @@ public class ProductService {
                         (first, second) -> first
                 ));
 
-        return products.stream()
+        List<ProductResponse> content = products.stream()
                 .map(product -> ProductResponse.from(product, frontCutUrl(frontCutKeys, product)))
                 .toList();
+
+        return PageResponseDTO.from(content, productPage);
     }
 
     /**
