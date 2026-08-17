@@ -25,4 +25,13 @@ public interface ProductCutRepository extends JpaRepository<ProductCut, Long> {
      * 제품마다 따로 조회하면 N+1이 나므로, 조회 결과를 Map으로 묶어 쓴다.
      */
     List<ProductCut> findAllByProductInAndFrontSlotIsTrue(List<Product> products);
+
+    /**
+     * 상세 조회용 — 제품 하나의 컷을 슬롯 번호 순으로 전부 가져온다.
+     * 촬영 순서대로 보여주기 위해 슬롯 번호로 정렬한다.
+     *
+     * @param productId 제품 식별자
+     * @return 슬롯 번호 오름차순 제품 컷 목록
+     */
+    List<ProductCut> findAllByProductIdOrderBySlotNoAsc(Long productId);
 }
