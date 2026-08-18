@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -85,5 +86,32 @@ class WornImageControllerTest {
         assertThat(response.getBody().data()).isEqualTo(serviceResponse);
         assertThat(response.getBody().error()).isNull();
         verify(wornImageService).regenerate(1L, 20L, 30L);
+    }
+
+    @Test
+    @DisplayName("착용 이미지 목록 조회 요청을 서비스에 전달하고 RsData 응답으로 반환한다")
+    void getWornImages() {
+        List<WornImageResponse> serviceResponse = List.of(
+                new WornImageResponse(
+                        40L,
+                        20L,
+                        30L,
+                        31L,
+                        "worn-image-url",
+                        Generator.GEMINI,
+                        LocalDateTime.of(2026, 8, 13, 1, 0)
+                )
+        );
+        when(wornImageService.getWornImages(1L, 20L)).thenReturn(serviceResponse);
+
+        ResponseEntity<RsData<List<WornImageResponse>>> response =
+                wornImageController.getWornImages(1L, 20L);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isEqualTo(serviceResponse);
+        assertThat(response.getBody().error()).isNull();
+        verify(wornImageService).getWornImages(1L, 20L);
     }
 }
