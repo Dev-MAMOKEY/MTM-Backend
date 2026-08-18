@@ -34,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -387,6 +388,66 @@ class WornImageServiceTest {
                 .isEqualTo(ErrorCode.WORN_IMAGE_NOT_FOUND);
 
         verify(imageStorage).delete("worn-images/generated");
+    }
+
+    @Test
+    @DisplayName("다른 회원의 기준 이미지는 목록 조회 시에도 존재하지 않는 기준 이미지와 동일하게 거부한다")
+    void rejectOtherMembersBaseImageOnList() {
+        BaseImage baseImage = baseImage(20L, member(2L, true));
+        when(baseImageRepository.findByIdWithPhotoAndMember(20L))
+                .thenReturn(Optional.of(baseImage));
+
+        assertThatThrownBy(() -> wornImageService.getWornImages(1L, 20L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.BASE_IMAGE_NOT_FOUND);
+
+        verifyNoInteractions(wornImageRepository, imageStorage);
+    }
+
+    @Test
+    @DisplayName("기준 이미지에 딸린 착용 이미지 목록을 최신순으로 반환한다")
+    void getWornImages() {
+        Member member = member(1L, true);
+        BaseImage baseImage = baseImage(20L, member);
+        Product product = product(30L, dimensions(), WearType.CROSSBODY);
+        ProductCut productCut = productCut(31L, product);
+
+        WornImage newerWornImage = WornImage.create(
+                baseImage, product, "worn-images/newer", Generator.GEMINI, productCut
+        );
+        ReflectionTestUtils.setField(newerWornImage, "id", 41L);
+        WornImage olderWornImage = WornImage.create(
+                baseImage, product, "worn-images/older", Generator.OPENAI, productCut
+        );
+        ReflectionTestUtils.setField(olderWornImage, "id", 40L);
+
+        when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
+        when(wornImageRepository.findAllByBaseImageIdOrderByCreatedAtDesc(20L))
+                .thenReturn(List.of(newerWornImage, olderWornImage));
+        when(imageStorage.getUrl("worn-images/newer")).thenReturn("newer-worn-image-url");
+        when(imageStorage.getUrl("worn-images/older")).thenReturn("older-worn-image-url");
+
+        List<WornImageResponse> responses = wornImageService.getWornImages(1L, 20L);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).id()).isEqualTo(41L);
+        assertThat(responses.get(0).imageUrl()).isEqualTo("newer-worn-image-url");
+        assertThat(responses.get(1).id()).isEqualTo(40L);
+        assertThat(responses.get(1).imageUrl()).isEqualTo("older-worn-image-url");
+    }
+
+    @Test
+    @DisplayName("기준 이미지에 딸린 착용 이미지가 없으면 빈 목록을 반환한다")
+    void getWornImagesEmpty() {
+        BaseImage baseImage = baseImage(20L, member(1L, true));
+        when(baseImageRepository.findByIdWithPhotoAndMember(20L)).thenReturn(Optional.of(baseImage));
+        when(wornImageRepository.findAllByBaseImageIdOrderByCreatedAtDesc(20L)).thenReturn(List.of());
+
+        List<WornImageResponse> responses = wornImageService.getWornImages(1L, 20L);
+
+        assertThat(responses).isEmpty();
+        verifyNoInteractions(imageStorage);
     }
 
     /**
