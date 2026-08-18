@@ -2,6 +2,7 @@ package com.likelion.mtm.domain.photo.service;
 
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.member.repository.MemberRepository;
+import com.likelion.mtm.domain.photo.dto.BaseImageResponse;
 import com.likelion.mtm.domain.photo.dto.PhotoResponse;
 import com.likelion.mtm.domain.photo.entity.Photo;
 import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
@@ -19,8 +20,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 원본 사진 업로드와 사진첩 조회·삭제 비즈니스 로직을 담당한다.
@@ -68,19 +71,47 @@ public class PhotoService {
 
     /**
      * 로그인한 회원의 사진첩을 최신 업로드 순으로 조회한다.
+     * 사진마다 연결된 기준 이미지가 있으면 함께 실어 보낸다.
      *
      * @param memberId 로그인 회원 식별자
      * @return 해당 회원의 원본 사진 목록
      */
     @Transactional(readOnly = true)
     public List<PhotoResponse> getPhotos(Long memberId) {
-        return photoRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)
-                .stream()
+        List<Photo> photos = photoRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId);
+
+        Map<Long, BaseImageResponse> baseImagesByPhotoId = findBaseImagesByPhotoId(photos);
+
+        return photos.stream()
                 .map(photo -> PhotoResponse.from(
                         photo,
-                        imageStorage.getUrl(photo.getStorageKey())
+                        imageStorage.getUrl(photo.getStorageKey()),
+                        baseImagesByPhotoId.get(photo.getId())
                 ))
                 .toList();
+    }
+
+    /**
+     * 사진 목록에 연결된 기준 이미지를 한 번에 조회해 사진 id 기준 맵으로 만든다.
+     * 사진마다 따로 조회하면 N+1이 되므로 배치로 처리한다.
+     *
+     * @param photos 기준 이미지를 조회할 원본 사진 목록
+     * @return 원본 사진 id를 key로 하는 기준 이미지 응답 맵
+     */
+    private Map<Long, BaseImageResponse> findBaseImagesByPhotoId(List<Photo> photos) {
+        List<Long> photoIds = photos.stream()
+                .map(Photo::getId)
+                .toList();
+
+        return baseImageRepository.findAllByPhotoIdIn(photoIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        baseImage -> baseImage.getPhoto().getId(),
+                        baseImage -> BaseImageResponse.from(
+                                baseImage,
+                                imageStorage.getUrl(baseImage.getStorageKey())
+                        )
+                ));
     }
 
     /**
