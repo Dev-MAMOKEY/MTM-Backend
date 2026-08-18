@@ -70,6 +70,7 @@ class BaseImageServiceTest {
         );
         baseImageService = new BaseImageService(
                 photoRepository,
+                baseImageRepository,
                 persistenceService,
                 new BaseImagePromptAssembler(),
                 imageGenerationGateway,
@@ -339,6 +340,39 @@ class BaseImageServiceTest {
                 .isEqualTo(ErrorCode.BASE_IMAGE_NOT_FOUND);
 
         verify(imageStorage).delete("base-images/generated");
+    }
+
+    @Test
+    @DisplayName("회원의 기준 이미지 목록을 최신순으로 반환한다")
+    void getMyBaseImages() {
+        Photo photo = photo(10L, member(1L, true), "photos/source");
+        BaseImage newer = BaseImage.create(photo, "base-images/newer");
+        ReflectionTestUtils.setField(newer, "id", 21L);
+        BaseImage older = BaseImage.create(photo, "base-images/older");
+        ReflectionTestUtils.setField(older, "id", 20L);
+
+        when(baseImageRepository.findAllByMemberIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of(newer, older));
+        when(imageStorage.getUrl("base-images/newer")).thenReturn("newer-url");
+        when(imageStorage.getUrl("base-images/older")).thenReturn("older-url");
+
+        List<BaseImageResponse> result = baseImageService.getMyBaseImages(1L);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).id()).isEqualTo(21L);
+        assertThat(result.get(0).imageUrl()).isEqualTo("newer-url");
+        assertThat(result.get(1).id()).isEqualTo(20L);
+        assertThat(result.get(1).imageUrl()).isEqualTo("older-url");
+    }
+
+    @Test
+    @DisplayName("기준 이미지가 없으면 빈 목록을 반환한다")
+    void getMyBaseImagesWhenEmpty() {
+        when(baseImageRepository.findAllByMemberIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of());
+
+        assertThat(baseImageService.getMyBaseImages(1L)).isEmpty();
+        verifyNoInteractions(imageStorage);
     }
 
     private void stubGeneration(Photo photo) {

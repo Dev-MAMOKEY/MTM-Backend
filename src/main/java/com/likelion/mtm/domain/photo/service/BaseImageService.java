@@ -3,6 +3,7 @@ package com.likelion.mtm.domain.photo.service;
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.photo.dto.BaseImageResponse;
 import com.likelion.mtm.domain.photo.entity.Photo;
+import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
 import com.likelion.mtm.domain.photo.repository.PhotoRepository;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -34,6 +36,7 @@ public class BaseImageService {
     private static final String BASE_IMAGE_DIRECTORY = "base-images";
 
     private final PhotoRepository photoRepository;
+    private final BaseImageRepository baseImageRepository;
     private final BaseImagePersistenceService persistenceService;
     private final BaseImagePromptAssembler promptAssembler;
     private final ImageGenerationGateway imageGenerationGateway;
@@ -99,6 +102,21 @@ public class BaseImageService {
         result.deletedWornImageStorageKeys().forEach(this::deleteQuietly);
 
         return result.response();
+    }
+
+    /**
+     * 로그인한 회원이 만든 기준 이미지 목록을 최신순으로 조회한다.
+     * 착용 화면 진입 시 baseImageId를 고를 목록으로 쓰인다.
+     */
+    @Transactional(readOnly = true)
+    public List<BaseImageResponse> getMyBaseImages(Long memberId) {
+        return baseImageRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)
+                .stream()
+                .map(baseImage -> BaseImageResponse.from(
+                        baseImage,
+                        imageStorage.getUrl(baseImage.getStorageKey())
+                ))
+                .toList();
     }
 
     /**

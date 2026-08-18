@@ -3,7 +3,9 @@ package com.likelion.mtm.domain.photo.service;
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.member.repository.MemberRepository;
 import com.likelion.mtm.domain.photo.entity.Photo;
+import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
 import com.likelion.mtm.domain.photo.repository.PhotoRepository;
+import com.likelion.mtm.domain.worn.repository.WornImageRepository;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import com.likelion.mtm.infra.storage.ImageStorage;
@@ -33,6 +35,12 @@ class PhotoServiceTest {
     private PhotoRepository photoRepository;
 
     @Mock
+    private BaseImageRepository baseImageRepository;
+
+    @Mock
+    private WornImageRepository wornImageRepository;
+
+    @Mock
     private ImageStorage imageStorage;
 
     private PhotoService photoService;
@@ -42,6 +50,8 @@ class PhotoServiceTest {
         photoService = new PhotoService(
                 memberRepository,
                 photoRepository,
+                baseImageRepository,
+                wornImageRepository,
                 imageStorage
         );
     }
