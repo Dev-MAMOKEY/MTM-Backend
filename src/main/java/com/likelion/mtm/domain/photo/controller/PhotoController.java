@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -72,6 +74,28 @@ public class PhotoController {
         return ResponseEntity.ok(
                 RsData.success(photoService.getPhotos(memberId))
         );
+    }
+
+    /**
+     * 로그인한 회원의 원본 사진을 삭제한다.
+     */
+    @Operation(
+            summary = "원본 사진 삭제",
+            description = "사진을 삭제한다. 그 사진으로 만든 기준 이미지와 착용 이미지도 함께 삭제되며 되돌릴 수 없다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "삭제 성공"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없거나 만료됨"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않거나 본인 소유가 아닌 사진")
+    })
+    @DeleteMapping("/{photoId}")
+    public ResponseEntity<RsData<String>> deletePhoto(
+            @AuthenticationPrincipal Long memberId,
+            // 이름을 명시하지 않으면 IntelliJ 실행 시 500이 난다 (팀 컨벤션)
+            @PathVariable("photoId") Long photoId
+    ) {
+        photoService.delete(memberId, photoId);
+        return ResponseEntity.ok(RsData.success("사진이 삭제되었습니다."));
     }
 
 }
