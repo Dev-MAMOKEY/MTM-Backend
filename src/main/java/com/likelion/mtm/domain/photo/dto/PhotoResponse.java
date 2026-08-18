@@ -16,17 +16,6 @@ public record PhotoResponse(
 ) {
 
     /**
-     * 원본 사진 엔티티와 이미지 접근 URL을 기준 이미지 없이 응답 DTO로 변환한다.
-     *
-     * @param photo 원본 사진 엔티티
-     * @param imageUrl 이미지 접근 URL
-     * @return 원본 사진 응답 DTO
-     */
-    public static PhotoResponse from(Photo photo, String imageUrl) {
-        return from(photo, imageUrl, null);
-    }
-
-    /**
      * 원본 사진 엔티티와 이미지 접근 URL, 기준 이미지를 응답 DTO로 변환한다.
      *
      * @param photo 원본 사진 엔티티

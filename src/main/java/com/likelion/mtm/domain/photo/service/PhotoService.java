@@ -66,7 +66,8 @@ public class PhotoService {
 
         String imageUrl = imageStorage.getUrl(savedPhoto.getStorageKey());
 
-        return PhotoResponse.from(savedPhoto, imageUrl);
+        // 방금 업로드한 사진은 기준 이미지를 아직 만들지 않았으므로 null을 명시한다
+        return PhotoResponse.from(savedPhoto, imageUrl, null);
     }
 
     /**
