@@ -50,9 +50,83 @@ MCM 제품 가상 착용 서비스 — 백엔드
 | 7 | #9 | 이미 본 제품은 즉시 다시 뜬다 | ✅ |
 | 8 | #10 | 착용 이미지를 다시 만들 수 있다 | ✅ |
 | 9 | #11 | 기준 이미지를 다시 만들면 착용 이미지가 정리된다 | ✅ |
-| 10 | #12 | OpenAI로 갈아끼워 비교한다 | 🔄 전환 구현 완료, 공급자 비교·선정 진행 중 |
+| 10 | #12 | OpenAI로 갈아끼워 비교한다 | ✅ Gemini 최종 채택 |
 
-MCM 제품 **30 SKU**와 제품 컷 **231장**이 적재되어 있다.
+**슬라이스 10개 전부 완료.** MCM 제품 **30 SKU**와 제품 컷 **231장**이 적재되어 있다.
+
+이미지 생성은 **처음에 OpenAI로 구현했다.** 테스트 과정에서 응답 시간과 결과 품질에 문제가 있어 Gemini와 비교 테스트를 진행했고, 팀 회의를 거쳐 **Gemini를 최종 채택**했다. 자세한 경위는 [트러블슈팅](#트러블슈팅)에 정리했다.
+
+### API 목록
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/api/v1/auth/signup` | 회원가입 |
+| `POST` | `/api/v1/auth/login` | 로그인 (액세스·리프레시 토큰 발급) |
+| `POST` | `/api/v1/auth/reissue` | 액세스 토큰 재발급 |
+| `GET` | `/api/v1/members/me` | 내 정보 조회 |
+| `POST` | `/api/v1/members/me/body-info` | 신체 정보 저장 |
+| `PATCH` | `/api/v1/members/me/body-info` | 신체 정보 부분 수정 |
+| `GET` | `/api/v1/products` | 제품 목록 조회 (페이징) |
+| `GET` | `/api/v1/products/{productId}` | 제품 상세 조회 |
+| `POST` | `/api/v1/photos` | 원본 사진 업로드 |
+| `GET` | `/api/v1/photos` | 사진첩 조회 |
+| `DELETE` | `/api/v1/photos/{photoId}` | 사진 삭제 (기준·착용 이미지 연쇄 삭제) |
+| `POST` | `/api/v1/photos/{photoId}/base-image` | 기준 이미지 생성 |
+| `POST` | `/api/v1/photos/{photoId}/base-image/regenerate` | 기준 이미지 재생성 |
+| `GET` | `/api/v1/base-images` | 내 기준 이미지 목록 조회 |
+| `POST` | `/api/v1/base-images/{baseImageId}/worn-images` | 착용 이미지 생성 (같은 조합은 재사용) |
+| `POST` | `/api/v1/base-images/{baseImageId}/worn-images/regenerate` | 착용 이미지 재생성 |
+| `GET` | `/api/v1/base-images/{baseImageId}/worn-images` | 기준 이미지별 착용 이미지 목록 조회 |
+
+---
+
+## 트러블슈팅
+
+### 1. 이미지 생성 공급자를 OpenAI에서 Gemini로 교체
+
+이미지 생성은 처음에 **OpenAI(`gpt-image-2`)로 구현**했다. 동작은 했지만 테스트에서 두 가지가 걸렸다.
+
+- **응답 시간** — 길게는 30~40초. 로딩바로 버티기 어렵고, 리버스 프록시를 붙이면 기본 타임아웃(nginx 60초)에도 걸릴 수 있는 값이다.
+- **결과 품질** — 제품이 원본과 다르게 그려지는 빈도가 높았다.
+
+그래서 Gemini와 비교 테스트를 진행했고, **응답 시간이 10초 이내로 짧고 결과도 더 안정적**이어서 팀 회의를 거쳐 Gemini를 최종 채택했다.
+
+교체 비용이 낮았던 건 `ImageGenerationGateway` 인터페이스 뒤에 구현체를 둔 구조 덕분이다. **도메인 코드는 한 줄도 바뀌지 않았고, 환경 변수 하나로 전환된다.**
+
+```
+IMAGE_GENERATION_PROVIDER=GEMINI
+```
+
+Gemini 안에서 어떤 모델을 쓸지도 측정으로 정했다. `GeminiImageModelBenchmark`가 후보 3종(`gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image`)을 실제 호출해 모델별 지연시간과 결과 이미지를 비교한다. 과금이 발생하므로 CI에서는 제외하고 필요할 때만 수동으로 실행한다.
+
+> OpenAI 구현체는 지우지 않고 폴백으로 남겨 두었다. 설정만 바꾸면 언제든 되돌릴 수 있다.
+
+### 2. 같은 제품을 다시 고를 때마다 AI를 다시 호출
+
+생성 결과가 매번 달라지는 특성(ADR 0001) 때문에 **(기준 이미지, 제품) 조합으로 저장**해 두고 재사용한다. 같은 조합을 다시 요청하면 AI를 호출하지 않고 저장된 결과를 바로 돌려준다.
+
+**수십 초에서 1초 미만으로 줄었고**, AI 호출 비용도 그만큼 아꼈다.
+
+### 3. 크롤링 데이터의 통화가 스키마와 맞지 않음
+
+`product.currency`가 `ENUM('KRW')`인데 크롤링한 30건이 전부 USD였다. `ddl-auto: validate`라 적재가 아예 되지 않는 상황이었다.
+
+환율로 환산하면 원본 가격 정보가 사라지므로 **`ENUM('KRW','USD')`로 확장하고 원본 통화를 그대로 저장**하는 쪽을 택했다. 표기 방식은 클라이언트가 정한다.
+
+### 4. 사진을 삭제해도 저장소에 파일이 남음
+
+외래 키가 `ON DELETE CASCADE`라 사진만 지워도 DB는 정리되지만, 행이 사라지는 순간 `storage_key`를 잃어 **S3 객체가 영구히 남는다.**
+
+지우기 전에 저장소 키를 모으고 자식(착용 이미지 → 기준 이미지 → 원본 사진)부터 명시적으로 삭제한다. 저장소 삭제는 DB 삭제가 끝난 뒤 마지막에 수행한다 — 트랜잭션 안에서 지웠다가 롤백되면 DB는 되돌아가도 파일은 복구할 수 없기 때문이다.
+
+### 5. 목록 조회의 N+1
+
+제품 목록의 대표 이미지, 사진첩의 기준 이미지를 항목마다 조회하면 N+1이 발생한다. 두 곳 모두 **현재 페이지 분량을 한 번에 조회해 `Map`으로 묶어** 매칭하도록 처리했다.
+
+### 남아 있는 과제
+
+- **이미지 생성 실패가 로그에 남지 않는 경로가 있다.** SDK 예외는 로그가 남지만, 응답에 이미지가 없어 `parseGeneratedImage`에서 던지는 경우는 로그 없이 502만 나간다. 원인 추적이 어려워 개선이 필요하다.
+- **`product_cut.is_worn_slot`이 전부 `false`다.** 크롤링 데이터에 모델 착용 컷을 판정할 근거가 없어 적재 시 지정하지 못했다.
 
 ---
 
@@ -65,7 +139,7 @@ com.likelion.mtm
 ├── global                          # 도메인 공통
 │   ├── config                      # SecurityConfig, SwaggerConfig, JpaAuditingConfig,
 │   │                               # S3Config, GeminiConfig, OpenAiConfig, ImageGenerationConfig
-│   ├── common                      # BaseTimeEntity
+│   ├── common                      # BaseTimeEntity, PageResponseDTO<T>
 │   ├── rsdata                      # RsData<T>
 │   ├── exception                   # CustomException, ErrorCode, GlobalExceptionHandler
 │   └── security                    # JwtProvider, JwtAuthenticationFilter,
@@ -73,7 +147,7 @@ com.likelion.mtm
 │
 ├── domain
 │   ├── member                      # 회원 · 인증 · 신체 정보               [슬라이스 2, 3]
-│   ├── product                     # 제품 · 실측 치수 파서 · 착용 방식 분류기 [슬라이스 1]
+│   ├── product                     # 제품 · 실측 치수 파서 · 착용 방식 분류기 · 크롤링 적재기 [슬라이스 1]
 │   ├── photo                       # 원본 사진(사진첩) · 기준 이미지        [슬라이스 4, 5, 9]
 │   └── worn                        # 착용 이미지 · 재사용 · 재생성          [슬라이스 6, 7, 8]
 │
@@ -260,6 +334,7 @@ Repository  DB 접근
 - 모든 응답은 `RsData<T>`로 감싼다.
 - 예외는 `CustomException` + `ErrorCode`를 던지고 `GlobalExceptionHandler`가 처리한다.
 - **내부 예외 메시지를 그대로 응답에 노출하지 않는다.**
+- 페이징 응답은 `PageResponseDTO<T>`로 감싼다. **Spring의 `Page`를 직접 노출하지 않는다.**
 
 ### 엔티티와 DTO
 
@@ -308,11 +383,11 @@ Repository  DB 접근
 
 ## 작업 분배
 
-| 트랙 | 담당 | 담당한 슬라이스 |
+| 트랙 | 담당 | 담당한 작업 |
 |---|---|---|
-| A. 회원 · 제품 · 배포 | 김동환 | #4, #5, #3(→#24), 배포 환경(#31) |
-| B. 이미지 생성 인프라 | 최정훈 | #6, #7, #8, 스토리지 추상화, AWS 인프라 |
-| C. 이미지 파이프라인 | 유소영 | ERD·엔티티, 크롤링 데이터, #9, #10, #11 |
+| A. 회원 · 제품 · 배포 | 김동환 | 슬라이스 2·3(#4·#5), 슬라이스 1(#3→#24), 제품 상세·목록 페이징(#34), 착용 방식 노출(#37), 사진 삭제(#38), Docker 배포 환경(#31) |
+| B. 이미지 생성 인프라 | 최정훈 | 슬라이스 4·5·6(#6·#7·#8), `ImageStorage`·`ImageGenerationGateway` 추상화, Gemini·OpenAI 게이트웨이, AWS 인프라 |
+| C. 이미지 파이프라인 | 유소영 | ERD·엔티티(#13), 크롤링 데이터 수집, 슬라이스 7·8·9(#9·#10·#11), 기준 이미지·착용 이미지 조회 API(#41·#43·#45) |
 
 - A/B/C가 마주치는 접점은 `ImageGenerationGateway` / `ImageStorage` **인터페이스 시그니처**뿐이다. Phase 0에서 확정한 뒤 바꾸지 않는다.
-- `#10`, `#11`은 같은 파일(`domain/worn`)을 건드리므로 동시에 진행하지 않고 순서대로 처리한다.
+- `#10`, `#11`은 같은 파일(`domain/worn`)을 건드리므로 동시에 진행하지 않고 순서대로 처리했다.
