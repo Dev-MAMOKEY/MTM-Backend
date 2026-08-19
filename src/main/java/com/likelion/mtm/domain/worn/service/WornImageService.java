@@ -27,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -133,6 +134,23 @@ public class WornImageService {
         deleteQuietly(result.previousStorageKey());
 
         return WornImageResponse.from(result.wornImage(), imageUrl);
+    }
+
+    /**
+     * 로그인 회원 소유의 기준 이미지에 딸린 착용 이미지 목록을 최신순으로 조회한다.
+     * 착용 화면의 "착용 이미지 N장" 표시와 재생성 경고에 필요한 개수를 채우는 데 쓰인다.
+     */
+    @Transactional(readOnly = true)
+    public List<WornImageResponse> getWornImages(Long memberId, Long baseImageId) {
+        findOwnedBaseImage(memberId, baseImageId);
+
+        return wornImageRepository.findAllByBaseImageIdOrderByCreatedAtDesc(baseImageId)
+                .stream()
+                .map(wornImage -> WornImageResponse.from(
+                        wornImage,
+                        imageStorage.getUrl(wornImage.getStorageKey())
+                ))
+                .toList();
     }
 
     /**

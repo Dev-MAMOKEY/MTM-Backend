@@ -2,8 +2,11 @@ package com.likelion.mtm.domain.photo.service;
 
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.member.repository.MemberRepository;
+import com.likelion.mtm.domain.photo.entity.BaseImage;
 import com.likelion.mtm.domain.photo.entity.Photo;
+import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
 import com.likelion.mtm.domain.photo.repository.PhotoRepository;
+import com.likelion.mtm.domain.worn.repository.WornImageRepository;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
 import com.likelion.mtm.infra.storage.ImageStorage;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +37,12 @@ class PhotoServiceTest {
     private PhotoRepository photoRepository;
 
     @Mock
+    private BaseImageRepository baseImageRepository;
+
+    @Mock
+    private WornImageRepository wornImageRepository;
+
+    @Mock
     private ImageStorage imageStorage;
 
     private PhotoService photoService;
@@ -42,6 +52,8 @@ class PhotoServiceTest {
         photoService = new PhotoService(
                 memberRepository,
                 photoRepository,
+                baseImageRepository,
+                wornImageRepository,
                 imageStorage
         );
     }
@@ -211,5 +223,59 @@ class PhotoServiceTest {
 
         verify(photoRepository)
                 .findAllByMemberIdOrderByCreatedAtDesc(memberId);
+    }
+
+    @Test
+    @DisplayName("사진첩 조회 시 기준 이미지가 있는 사진과 없는 사진이 섞여 있으면 각각 반영한다")
+    void getPhotosWithMixedBaseImages() {
+        // given
+        Long memberId = 1L;
+
+        Member member = Member.register(
+                "test@example.com",
+                "encoded-password"
+        );
+
+        Photo photoWithBaseImage = photo(10L, member, "photos/with-base.jpg");
+        Photo photoWithoutBaseImage = photo(11L, member, "photos/without-base.jpg");
+
+        BaseImage baseImage = BaseImage.create(photoWithBaseImage, "base-images/base.jpg");
+        ReflectionTestUtils.setField(baseImage, "id", 100L);
+
+        when(photoRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId))
+                .thenReturn(List.of(photoWithBaseImage, photoWithoutBaseImage));
+
+        when(imageStorage.getUrl("photos/with-base.jpg"))
+                .thenReturn("http://localhost:8080/images/photos/with-base.jpg");
+        when(imageStorage.getUrl("photos/without-base.jpg"))
+                .thenReturn("http://localhost:8080/images/photos/without-base.jpg");
+        when(imageStorage.getUrl("base-images/base.jpg"))
+                .thenReturn("http://localhost:8080/images/base-images/base.jpg");
+
+        when(baseImageRepository.findAllByPhotoIdIn(List.of(10L, 11L)))
+                .thenReturn(List.of(baseImage));
+
+        // when
+        var responses = photoService.getPhotos(memberId);
+
+        // then
+        assertThat(responses).hasSize(2);
+
+        var responseWithBaseImage = responses.get(0);
+        assertThat(responseWithBaseImage.id()).isEqualTo(10L);
+        assertThat(responseWithBaseImage.baseImage()).isNotNull();
+        assertThat(responseWithBaseImage.baseImage().id()).isEqualTo(100L);
+        assertThat(responseWithBaseImage.baseImage().imageUrl())
+                .isEqualTo("http://localhost:8080/images/base-images/base.jpg");
+
+        var responseWithoutBaseImage = responses.get(1);
+        assertThat(responseWithoutBaseImage.id()).isEqualTo(11L);
+        assertThat(responseWithoutBaseImage.baseImage()).isNull();
+    }
+
+    private Photo photo(Long id, Member member, String storageKey) {
+        Photo photo = Photo.upload(member, storageKey);
+        ReflectionTestUtils.setField(photo, "id", id);
+        return photo;
     }
 }

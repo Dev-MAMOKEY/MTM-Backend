@@ -51,4 +51,13 @@ public interface WornImageRepository extends JpaRepository<WornImage, Long> {
      * @return 삭제된 착용 이미지 목록
      */
     List<WornImage> deleteAllByBaseImageId(Long baseImageId);
+
+    /**
+     * 기준 이미지에 딸린 착용 이미지 목록을 최신순으로 조회한다.
+     * 착용 화면의 "착용 이미지 N장" 표시와 재생성 경고에 쓰인다.
+     *
+     * @param baseImageId 기준 이미지 식별자
+     * @return 해당 기준 이미지의 착용 이미지 목록
+     */
+    List<WornImage> findAllByBaseImageIdOrderByCreatedAtDesc(Long baseImageId);
 }

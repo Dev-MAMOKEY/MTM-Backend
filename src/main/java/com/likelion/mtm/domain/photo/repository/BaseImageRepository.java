@@ -63,4 +63,15 @@ public interface BaseImageRepository extends JpaRepository<BaseImage, Long> {
      * @return 조회된 기준 이미지 목록
      */
     List<BaseImage> findAllByPhotoIdIn(Collection<Long> photoIds);
+
+    /**
+     * 로그인한 회원이 만든 기준 이미지 전체를 최신순으로 조회한다.
+     * 착용 화면 진입 시 baseImageId를 고를 목록으로 쓰인다.
+     *
+     * @param memberId 회원 식별자
+     * @return 해당 회원의 기준 이미지 목록
+     */
+    @EntityGraph(attributePaths = "photo")
+    @Query("select b from BaseImage b where b.photo.member.id = :memberId order by b.createdAt desc")
+    List<BaseImage> findAllByMemberIdOrderByCreatedAtDesc(@Param("memberId") Long memberId);
 }
