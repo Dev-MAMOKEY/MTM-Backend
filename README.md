@@ -9,8 +9,8 @@ MCM 제품 가상 착용 서비스 — 백엔드
 회원 업로드              정자세·흰 배경                  (사진, SKU)별 저장·재사용
 ```
 
-- **배포 서비스**: http://52.79.118.19:8080
-- **API 문서(Swagger)**: http://52.79.118.19:8080/swagger-ui/index.html
+- **배포 서비스**: https://52.79.118.19
+- **API 문서(Swagger)**: https://52.79.118.19/swagger-ui/index.html
 - 프론트엔드: [Dev-MAMOKEY/MTM-frontend](https://github.com/Dev-MAMOKEY/MTM-frontend)
 - PRD: [#2 PRD v2](https://github.com/Dev-MAMOKEY/MTM-Backend/issues/2)
 - 용어집: [`CONTEXT.md`](./CONTEXT.md)
@@ -223,7 +223,21 @@ docker compose logs -f
 
 - `restart: unless-stopped`라 서버가 재부팅돼도 컨테이너가 자동으로 올라온다.
 - `.env`에 `DOCKER_IMAGE`가 없으면 compose가 기동을 거부한다.
-- 외부 접속이 되려면 **EC2 보안 그룹과 서버 방화벽(`ufw`) 양쪽에 8080**이 열려 있어야 한다.
+
+**HTTPS**
+
+프론트엔드가 HTTPS로 배포되어 브라우저가 혼합 콘텐츠를 차단하므로, 백엔드도 HTTPS로 서비스한다.
+
+- 리버스 프록시가 **443**에서 TLS를 종료하고 컨테이너의 8080으로 전달한다. 80으로 들어온 요청은 HTTPS로 리다이렉트된다.
+- 인증서는 Let's Encrypt를 쓰며, 도메인 없이 **IP 주소(`52.79.118.19`)로 발급**했다.
+- 프록시가 TLS를 끊고 백엔드에는 HTTP로 넘기기 때문에, 스프링이 원래 프로토콜을 인식하도록 아래 설정이 필요하다. 없으면 `Secure` 쿠키나 리다이렉트 주소가 `http://`로 나간다.
+
+```yaml
+server:
+  forward-headers-strategy: framework
+```
+
+- 외부 접속이 되려면 **EC2 보안 그룹과 서버 방화벽(`ufw`)에 80·443**이 열려 있어야 한다.
 
 ---
 
