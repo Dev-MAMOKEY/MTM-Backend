@@ -12,6 +12,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -64,8 +68,13 @@ public class OpenAiImageGateway implements ImageGenerationGateway {
 
         try {
             validateInputMimeTypes(request.images());
-            temporaryImages = createTemporaryImages(request.images());
-            params = toParams(request, temporaryImages);
+            List<ImageInput> normalizedImages = normalizeMixedInputFormats(request.images());
+            ImageGenerationRequest normalizedRequest = new ImageGenerationRequest(
+                    normalizedImages,
+                    request.prompt()
+            );
+            temporaryImages = createTemporaryImages(normalizedImages);
+            params = toParams(normalizedRequest, temporaryImages);
             ImagesResponse response = callOpenAi(params);
             GeneratedImage generatedImage = parseGeneratedImage(response);
             log.info("OpenAI 이미지 생성에 성공했습니다. model={}, mimeType={}",
@@ -149,7 +158,54 @@ public class OpenAiImageGateway implements ImageGenerationGateway {
     }
 
     /**
+     * 서로 다른 이미지 형식을 SDK 배열 필드가 공유할 수 있도록 PNG 형식으로 통일한다.
+     */
+    private List<ImageInput> normalizeMixedInputFormats(List<ImageInput> images) {
+        String firstMimeType = multipartContentType(images.get(0).mimeType());
+        boolean hasDifferentMimeType = images.stream()
+                .map(ImageInput::mimeType)
+                .map(this::multipartContentType)
+                .anyMatch(mimeType -> !mimeType.equals(firstMimeType));
+
+        if (!hasDifferentMimeType) {
+            return images;
+        }
+
+        return images.stream()
+                .map(this::convertToPng)
+                .toList();
+    }
+
+    /**
+     * OpenAI 다중 이미지 요청에서 공통 MIME 타입을 사용할 수 있도록 입력 이미지를 PNG로 변환한다.
+     */
+    private ImageInput convertToPng(ImageInput image) {
+        try {
+            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(image.data()));
+            if (bufferedImage == null) {
+                log.warn("OpenAI 입력 이미지를 PNG로 변환할 수 없습니다. mimeType={}",
+                        image.mimeType());
+                throw new CustomException(ErrorCode.IMAGE_GENERATION_ERROR);
+            }
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            if (!ImageIO.write(bufferedImage, "png", outputStream)) {
+                log.warn("OpenAI 입력 이미지의 PNG 인코더를 찾을 수 없습니다.");
+                throw new CustomException(ErrorCode.IMAGE_GENERATION_ERROR);
+            }
+            return new ImageInput(outputStream.toByteArray(), "image/png");
+        } catch (CustomException e) {
+            throw e;
+        } catch (IOException e) {
+            log.warn("OpenAI 입력 이미지의 PNG 변환에 실패했습니다. mimeType={}",
+                    image.mimeType(), e);
+            throw new CustomException(ErrorCode.IMAGE_GENERATION_ERROR);
+        }
+    }
+
+    /**
      * SDK의 배열 이미지 필드가 공유할 실제 MIME 타입을 확인한다.
+     * mixed 입력은 임시 파일 생성 전에 공통 PNG 형식으로 정규화되어야 한다.
      */
     private String commonMultipartContentType(List<ImageInput> images) {
         String contentType = multipartContentType(images.get(0).mimeType());

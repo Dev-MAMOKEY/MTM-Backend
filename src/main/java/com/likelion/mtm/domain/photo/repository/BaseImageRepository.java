@@ -1,7 +1,12 @@
 package com.likelion.mtm.domain.photo.repository;
 
 import com.likelion.mtm.domain.photo.entity.BaseImage;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -13,6 +18,26 @@ import java.util.Optional;
 public interface BaseImageRepository extends JpaRepository<BaseImage, Long> {
 
     /**
+     * 착용 이미지 생성 검증에 사용할 원본 사진과 회원 정보를 함께 조회한다.
+     *
+     * @param baseImageId 기준 이미지 식별자
+     * @return 원본 사진과 회원까지 조회된 기준 이미지
+     */
+    @EntityGraph(attributePaths = {"photo", "photo.member"})
+    @Query("select b from BaseImage b where b.id = :baseImageId")
+    Optional<BaseImage> findByIdWithPhotoAndMember(@Param("baseImageId") Long baseImageId);
+
+    /**
+     * 착용 이미지 저장 확정 동안 기준 이미지 행을 비관적 쓰기 잠금으로 조회한다.
+     *
+     * @param baseImageId 기준 이미지 식별자
+     * @return 잠긴 기준 이미지
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from BaseImage b where b.id = :baseImageId")
+    Optional<BaseImage> findByIdForUpdate(@Param("baseImageId") Long baseImageId);
+
+    /**
      * 원본 사진에 연결된 기준 이미지를 조회한다.
      *
      * @param photoId 원본 사진 식별자
@@ -21,10 +46,32 @@ public interface BaseImageRepository extends JpaRepository<BaseImage, Long> {
     Optional<BaseImage> findByPhotoId(Long photoId);
 
     /**
+     * 재생성 저장 확정 동안 기준 이미지 행을 비관적 쓰기 잠금으로 조회한다.
+     * "기준 이미지 다시 만들기"는 새 행이 아니라 이 행의 저장소 키를 교체한다.
+     *
+     * @param photoId 원본 사진 식별자
+     * @return 잠긴 기준 이미지
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from BaseImage b where b.photo.id = :photoId")
+    Optional<BaseImage> findByPhotoIdForUpdate(@Param("photoId") Long photoId);
+
+    /**
      * 여러 원본 사진에 연결된 기준 이미지를 한 번에 조회한다.
      *
      * @param photoIds 원본 사진 식별자 목록
      * @return 조회된 기준 이미지 목록
      */
     List<BaseImage> findAllByPhotoIdIn(Collection<Long> photoIds);
+
+    /**
+     * 로그인한 회원이 만든 기준 이미지 전체를 최신순으로 조회한다.
+     * 착용 화면 진입 시 baseImageId를 고를 목록으로 쓰인다.
+     *
+     * @param memberId 회원 식별자
+     * @return 해당 회원의 기준 이미지 목록
+     */
+    @EntityGraph(attributePaths = "photo")
+    @Query("select b from BaseImage b where b.photo.member.id = :memberId order by b.createdAt desc")
+    List<BaseImage> findAllByMemberIdOrderByCreatedAtDesc(@Param("memberId") Long memberId);
 }

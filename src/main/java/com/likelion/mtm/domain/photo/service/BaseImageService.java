@@ -3,6 +3,7 @@ package com.likelion.mtm.domain.photo.service;
 import com.likelion.mtm.domain.member.entity.Member;
 import com.likelion.mtm.domain.photo.dto.BaseImageResponse;
 import com.likelion.mtm.domain.photo.entity.Photo;
+import com.likelion.mtm.domain.photo.repository.BaseImageRepository;
 import com.likelion.mtm.domain.photo.repository.PhotoRepository;
 import com.likelion.mtm.global.exception.CustomException;
 import com.likelion.mtm.global.exception.ErrorCode;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -34,6 +36,7 @@ public class BaseImageService {
     private static final String BASE_IMAGE_DIRECTORY = "base-images";
 
     private final PhotoRepository photoRepository;
+    private final BaseImageRepository baseImageRepository;
     private final BaseImagePersistenceService persistenceService;
     private final BaseImagePromptAssembler promptAssembler;
     private final ImageGenerationGateway imageGenerationGateway;
@@ -53,19 +56,7 @@ public class BaseImageService {
         Member member = photo.getMember();
         validateBodyInfo(member);
 
-        ImageData sourceImage = imageStorage.load(photo.getStorageKey());
-        String prompt = promptAssembler.assemble(member.getHeightCm(), member.getWeightKg());
-        GeneratedImage generatedImage = imageGenerationGateway.generate(
-                new ImageGenerationRequest(
-                        List.of(new ImageInput(sourceImage.data(), sourceImage.mimeType())),
-                        prompt
-                )
-        );
-
-        String newStorageKey = imageStorage.store(
-                new ImageData(generatedImage.data(), generatedImage.mimeType()),
-                BASE_IMAGE_DIRECTORY
-        );
+        String newStorageKey = generateBaseImage(photo, member);
 
         try {
             BaseImagePersistenceService.FinalizationResult result =
@@ -80,6 +71,72 @@ public class BaseImageService {
             deleteQuietly(newStorageKey);
             throw e;
         }
+    }
+
+    /**
+     * 원본 사진은 그대로 둔 채 로그인 회원 소유의 기준 이미지만 다시 만든다.
+     * 옛 기준 이미지 위의 착용 이미지는 새 얼굴과 맞지 않으므로 함께 삭제한다.
+     * 아직 기준 이미지가 없으면 다시 만들 수 없으므로 거부한다.
+     */
+    public BaseImageResponse regenerate(Long memberId, Long photoId) {
+        Photo photo = findOwnedPhoto(memberId, photoId);
+
+        if (persistenceService.findExisting(photoId).isEmpty()) {
+            throw new CustomException(ErrorCode.BASE_IMAGE_NOT_FOUND);
+        }
+
+        Member member = photo.getMember();
+        validateBodyInfo(member);
+
+        String newStorageKey = generateBaseImage(photo, member);
+
+        BaseImagePersistenceService.RegenerationResult result;
+        try {
+            result = persistenceService.finalizeRegeneration(photoId, newStorageKey);
+        } catch (RuntimeException e) {
+            deleteQuietly(newStorageKey);
+            throw e;
+        }
+
+        deleteQuietly(result.previousStorageKey());
+        result.deletedWornImageStorageKeys().forEach(this::deleteQuietly);
+
+        return result.response();
+    }
+
+    /**
+     * 로그인한 회원이 만든 기준 이미지 목록을 최신순으로 조회한다.
+     * 착용 화면 진입 시 baseImageId를 고를 목록으로 쓰인다.
+     */
+    @Transactional(readOnly = true)
+    public List<BaseImageResponse> getMyBaseImages(Long memberId) {
+        return baseImageRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId)
+                .stream()
+                .map(baseImage -> BaseImageResponse.from(
+                        baseImage,
+                        imageStorage.getUrl(baseImage.getStorageKey())
+                ))
+                .toList();
+    }
+
+    /**
+     * 원본 사진과 회원 신체 정보로 기준 이미지를 생성해 저장하고 새 저장소 키를 돌려준다.
+     * 생성·신규 저장뿐이고 데이터베이스 확정은 호출자의 몫이다.
+     */
+    private String generateBaseImage(Photo photo, Member member) {
+        ImageData sourceImage = imageStorage.load(photo.getStorageKey());
+        String prompt = promptAssembler.assemble(member.getHeightCm(), member.getWeightKg());
+        GeneratedImage generatedImage = imageGenerationGateway.generate(
+                new ImageGenerationRequest(
+                        List.of(new ImageInput(sourceImage.data(), sourceImage.mimeType())),
+                        prompt
+                )
+        );
+
+        return imageStorage.store(
+                new ImageData(generatedImage.data(), generatedImage.mimeType()),
+                BASE_IMAGE_DIRECTORY
+        );
     }
 
     /**

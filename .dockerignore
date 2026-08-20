@@ -1,0 +1,17 @@
+# 빌드 컨텍스트에서 제외 — 이미지에 필요 없고 빌드만 느려진다
+.git
+.gradle
+build
+out
+.idea
+*.iml
+
+.env
+
+crawling-data
+
+# 문서
+docs
+README.md
+CONTEXT.md
+HELP.md
